@@ -738,107 +738,113 @@ export default function CalendarIndex({
                 {view !== 'month' && (
                     <>
                         {/* Desktop Time Grid */}
-                        <div className="hidden overflow-hidden rounded-xl border border-border bg-card md:block">
-                            {/* Day Columns Header */}
-                            <div
-                                className="grid border-b border-border bg-muted/20"
-                                style={{
-                                    gridTemplateColumns: `64px repeat(${dayColumns.length}, minmax(0, 1fr))`,
-                                }}
-                            >
-                                <div className="border-r border-border p-2 text-[11px] font-medium text-muted-foreground">
-                                    Jam
-                                </div>
-                                {dayColumns.map((dayKey) => {
-                                    const header = formatDayHeader(dayKey);
-                                    const isToday =
-                                        dayKey === toDateKey(new Date());
+                        <div className="hidden max-h-[700px] overflow-y-auto rounded-xl border border-border bg-card md:block">
+                            {/* Sticky Header & All-day Strip inside the same scroll container to prevent scrollbar alignment drift */}
+                            <div className="sticky top-0 z-10 bg-card">
+                                {/* Day Columns Header */}
+                                <div
+                                    className="grid border-b border-border bg-muted/20"
+                                    style={{
+                                        gridTemplateColumns: `64px repeat(${dayColumns.length}, minmax(0, 1fr))`,
+                                    }}
+                                >
+                                    <div className="border-r border-border p-2 text-[11px] font-medium text-muted-foreground">
+                                        Jam
+                                    </div>
+                                    {dayColumns.map((dayKey) => {
+                                        const header = formatDayHeader(dayKey);
+                                        const isToday =
+                                            dayKey === toDateKey(new Date());
 
-                                    return (
-                                        <div
-                                            key={dayKey}
-                                            className="border-r border-border px-3 py-2.5 last:border-r-0"
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-xs font-medium text-muted-foreground">
-                                                    {header.weekday}
-                                                </span>
-                                                <span
-                                                    className={`inline-flex size-6 items-center justify-center rounded-full text-xs font-semibold tabular-nums ${
-                                                        isToday
-                                                            ? 'bg-primary text-primary-foreground'
-                                                            : 'text-foreground'
-                                                    }`}
-                                                >
-                                                    {header.dayNum}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-
-                            {/* All-day & Task Deadlines Strip */}
-                            <div
-                                className="grid border-b border-border bg-background/60"
-                                style={{
-                                    gridTemplateColumns: `64px repeat(${dayColumns.length}, minmax(0, 1fr))`,
-                                }}
-                            >
-                                <div className="border-r border-border px-2 py-2 text-[11px] font-medium text-muted-foreground">
-                                    All-day
-                                </div>
-                                {dayColumns.map((dayKey) => {
-                                    const dayAllDay = getAllDayForDay(dayKey);
-                                    const dayDeadlines =
-                                        getDeadlinesForDay(dayKey);
-
-                                    return (
-                                        <div
-                                            key={`strip-${dayKey}`}
-                                            className="min-h-10 space-y-1 border-r border-border p-1.5 last:border-r-0"
-                                        >
-                                            {dayAllDay.map((event) => (
-                                                <button
-                                                    key={event.occurrence_key}
-                                                    type="button"
-                                                    onClick={() =>
-                                                        openEditModal(event)
-                                                    }
-                                                    className="flex w-full items-center justify-between gap-1 rounded-md border border-primary/30 bg-primary/10 px-2 py-1 text-left text-xs font-medium text-foreground hover:bg-primary/15"
-                                                >
-                                                    <span className="truncate">
-                                                        {event.title}
+                                        return (
+                                            <div
+                                                key={dayKey}
+                                                className="border-r border-border px-3 py-2.5 last:border-r-0"
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-xs font-medium text-muted-foreground">
+                                                        {header.weekday}
                                                     </span>
-                                                    {event.is_recurring && (
-                                                        <Repeat className="size-3 shrink-0 text-muted-foreground" />
-                                                    )}
-                                                </button>
-                                            ))}
-
-                                            {dayDeadlines.map((task) => (
-                                                <div
-                                                    key={`task-strip-${task.id}`}
-                                                    className={`flex items-center justify-between gap-1 rounded-md border px-2 py-1 text-xs ${TASK_PRIORITY_BADGE_CLASS[task.priority]}`}
-                                                >
-                                                    <span className="truncate font-medium">
-                                                        {task.title}
-                                                    </span>
-                                                    <span className="shrink-0 text-[10px] tabular-nums">
-                                                        {task.due_at_local?.slice(
-                                                            11,
-                                                            16,
-                                                        ) ?? ''}
+                                                    <span
+                                                        className={`inline-flex size-6 items-center justify-center rounded-full text-xs font-semibold tabular-nums ${
+                                                            isToday
+                                                                ? 'bg-primary text-primary-foreground'
+                                                                : 'text-foreground'
+                                                        }`}
+                                                    >
+                                                        {header.dayNum}
                                                     </span>
                                                 </div>
-                                            ))}
-                                        </div>
-                                    );
-                                })}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* All-day & Task Deadlines Strip */}
+                                <div
+                                    className="grid border-b border-border bg-background/60"
+                                    style={{
+                                        gridTemplateColumns: `64px repeat(${dayColumns.length}, minmax(0, 1fr))`,
+                                    }}
+                                >
+                                    <div className="border-r border-border px-2 py-2 text-right text-[11px] font-medium text-muted-foreground">
+                                        All-day
+                                    </div>
+                                    {dayColumns.map((dayKey) => {
+                                        const dayAllDay =
+                                            getAllDayForDay(dayKey);
+                                        const dayDeadlines =
+                                            getDeadlinesForDay(dayKey);
+
+                                        return (
+                                            <div
+                                                key={`strip-${dayKey}`}
+                                                className="min-h-10 space-y-1 border-r border-border p-1.5 last:border-r-0"
+                                            >
+                                                {dayAllDay.map((event) => (
+                                                    <button
+                                                        key={
+                                                            event.occurrence_key
+                                                        }
+                                                        type="button"
+                                                        onClick={() =>
+                                                            openEditModal(event)
+                                                        }
+                                                        className="flex w-full items-center justify-between gap-1 rounded-md border border-primary/30 bg-primary/10 px-2 py-1 text-left text-xs font-medium text-foreground hover:bg-primary/15"
+                                                    >
+                                                        <span className="truncate">
+                                                            {event.title}
+                                                        </span>
+                                                        {event.is_recurring && (
+                                                            <Repeat className="size-3 shrink-0 text-muted-foreground" />
+                                                        )}
+                                                    </button>
+                                                ))}
+
+                                                {dayDeadlines.map((task) => (
+                                                    <div
+                                                        key={`task-strip-${task.id}`}
+                                                        className={`flex items-center justify-between gap-1 rounded-md border px-2 py-1 text-xs ${TASK_PRIORITY_BADGE_CLASS[task.priority]}`}
+                                                    >
+                                                        <span className="truncate font-medium">
+                                                            {task.title}
+                                                        </span>
+                                                        <span className="shrink-0 text-[10px] tabular-nums">
+                                                            {task.due_at_local?.slice(
+                                                                11,
+                                                                16,
+                                                            ) ?? ''}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
 
-                            {/* Scrollable Hourly Grid */}
-                            <div className="max-h-[640px] overflow-y-auto">
+                            {/* Hourly Grid */}
+                            <div>
                                 <div
                                     className="relative grid"
                                     style={{
