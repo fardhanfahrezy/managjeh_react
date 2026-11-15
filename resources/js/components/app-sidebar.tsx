@@ -6,6 +6,7 @@ import {
     FolderGit2,
     FolderKanban,
     LayoutGrid,
+    Sparkles,
 } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
@@ -21,6 +22,7 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import { index as aiPlannerIndex } from '@/routes/ai-planner';
 import { index as calendarIndex } from '@/routes/calendar';
 import { index as projectsIndex } from '@/routes/projects';
 import { index as tasksIndex } from '@/routes/tasks';
@@ -46,6 +48,11 @@ const mainNavItems: NavItem[] = [
         title: 'Calendar',
         href: calendarIndex(),
         icon: CalendarDays,
+    },
+    {
+        title: 'AI Planner',
+        href: aiPlannerIndex(),
+        icon: Sparkles,
     },
 ];
 

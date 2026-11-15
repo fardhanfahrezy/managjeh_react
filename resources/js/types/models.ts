@@ -158,3 +158,36 @@ export type DashboardData = {
     whatsapp_status: DashboardWhatsAppStatus;
     completed_summary: DashboardCompletedSummary;
 };
+
+export type AiPlannerRunStatus = 'pending' | 'success' | 'failed';
+
+export type AiPlannerWarning = {
+    type: string;
+    message: string;
+};
+
+export type AiPlannerRecommendedReminder = {
+    task_id: number;
+    task_title?: string;
+    remind_at_local: string;
+    reason: string;
+};
+
+export type AiPlannerResult = {
+    summary: string;
+    priorities: AiPlannerPriorityItem[];
+    recommended_reminders: AiPlannerRecommendedReminder[];
+    warnings: AiPlannerWarning[];
+};
+
+export type AiPlannerRun = {
+    id: number;
+    planning_date: string;
+    trigger_type: string;
+    provider: string;
+    model: string | null;
+    status: AiPlannerRunStatus;
+    result: AiPlannerResult | null;
+    error_message: string | null;
+    created_at: string | null;
+};
