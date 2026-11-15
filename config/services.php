@@ -42,4 +42,25 @@ return [
         'timeout' => (int) env('WHATSAPP_TIMEOUT', 10),
     ],
 
+    'gemini' => [
+        'api_key' => env('GEMINI_API_KEY', ''),
+        'model' => env('GEMINI_MODEL', 'gemini-flash-latest'),
+        'endpoint' => env('GEMINI_ENDPOINT', 'https://generativelanguage.googleapis.com/v1beta'),
+        'timeout' => (int) env('AI_PLANNER_TIMEOUT', 20),
+    ],
+
+    'grok' => [
+        'api_key' => env('GROK_API_KEY', env('XAI_API_KEY', '')),
+        'model' => env('GROK_MODEL', 'grok-3-mini'),
+        'endpoint' => env('GROK_ENDPOINT', 'https://api.x.ai/v1/chat/completions'),
+        'timeout' => (int) env('AI_PLANNER_TIMEOUT', 20),
+    ],
+
+    'openrouter' => [
+        'api_key' => env('OPENROUTER_API_KEY', ''),
+        'model' => env('OPENROUTER_MODEL', 'google/gemini-3.8-flash'),
+        'endpoint' => env('OPENROUTER_ENDPOINT', 'https://openrouter.ai/api/v1/chat/completions'),
+        'timeout' => (int) env('AI_PLANNER_TIMEOUT', 20),
+    ],
+
 ];
