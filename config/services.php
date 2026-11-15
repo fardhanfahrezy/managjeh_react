@@ -36,9 +36,11 @@ return [
     ],
 
     'whatsapp' => [
-        'driver' => env('WHATSAPP_DRIVER', 'null'),
+        'driver' => env('WHATSAPP_DRIVER', env('FONNTE_TOKEN') ? 'fonnte' : 'null'),
         'endpoint' => env('WHATSAPP_API_ENDPOINT', ''),
         'api_token' => env('WHATSAPP_API_TOKEN', ''),
+        'fonnte_token' => env('FONNTE_TOKEN', ''),
+        'fonnte_endpoint' => env('FONNTE_API_ENDPOINT', 'https://api.fonnte.com/send'),
         'timeout' => (int) env('WHATSAPP_TIMEOUT', 10),
     ],
 

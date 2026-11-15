@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Contracts\WhatsAppGatewayInterface;
+use App\Services\WhatsApp\FonnteWhatsAppGateway;
 use App\Services\WhatsApp\HttpWhatsAppGateway;
 use App\Services\WhatsApp\NullWhatsAppGateway;
 use Carbon\CarbonImmutable;
@@ -23,6 +24,14 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->bind(WhatsAppGatewayInterface::class, function (): WhatsAppGatewayInterface {
             $driver = config('services.whatsapp.driver', 'null');
+
+            if ($driver === 'fonnte') {
+                return new FonnteWhatsAppGateway(
+                    token: (string) config('services.whatsapp.fonnte_token', ''),
+                    endpoint: (string) config('services.whatsapp.fonnte_endpoint', 'https://api.fonnte.com/send'),
+                    timeoutSeconds: (int) config('services.whatsapp.timeout', 10),
+                );
+            }
 
             if ($driver === 'http') {
                 return new HttpWhatsAppGateway(

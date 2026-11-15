@@ -9,10 +9,13 @@ use App\Models\Reminder;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\Reminder\QuietHoursAdjuster;
+use App\Services\WhatsApp\FonnteWhatsAppGateway;
 use App\Services\WhatsApp\WhatsAppSendResult;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\Client\Request as HttpClientRequest;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 
 test('quiet hours adjuster shifts reminders inside 00:00-05:00 local time to 05:00 local time', function () {
     $user = User::factory()->create([
@@ -185,4 +188,29 @@ test('whatsapp otp send stores hashed otp in cache and verify marks number verif
     $user->refresh();
     expect($user->whatsapp_verified_at)->not->toBeNull()
         ->and($user->canReceiveWhatsAppReminders())->toBeTrue();
+});
+
+test('fonnte gateway sends form request with authorization header and parses success and failure responses', function () {
+    Http::fake([
+        'api.fonnte.com/send' => Http::sequence()
+            ->push(['status' => true, 'id' => ['fonnte-999']], 200)
+            ->push(['status' => false, 'reason' => 'invalid token'], 200),
+    ]);
+
+    $gateway = new FonnteWhatsAppGateway(token: 'test-fonnte-token');
+
+    $successResult = $gateway->sendMessage('+6281234567890', 'Halo Managjeh', 'idem-1');
+    expect($successResult->success)->toBeTrue()
+        ->and($successResult->providerMessageId)->toBe('fonnte-999');
+
+    Http::assertSent(function (HttpClientRequest $request): bool {
+        return $request->url() === 'https://api.fonnte.com/send'
+            && $request->hasHeader('Authorization', 'test-fonnte-token')
+            && $request['target'] === '6281234567890'
+            && $request['message'] === 'Halo Managjeh';
+    });
+
+    $failedResult = $gateway->sendVerificationOtp('+6281234567890', '123456');
+    expect($failedResult->success)->toBeFalse()
+        ->and($failedResult->errorMessage)->toBe('invalid token');
 });
