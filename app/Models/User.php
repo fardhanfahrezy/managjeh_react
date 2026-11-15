@@ -99,6 +99,14 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
         return $this->hasMany(Reminder::class);
     }
 
+    /**
+     * @return HasMany<AiPlannerRun, $this>
+     */
+    public function aiPlannerRuns(): HasMany
+    {
+        return $this->hasMany(AiPlannerRun::class);
+    }
+
     public function canReceiveWhatsAppReminders(): bool
     {
         return $this->whatsapp_enabled
