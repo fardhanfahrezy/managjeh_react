@@ -33,6 +33,12 @@ class UserFactory extends Factory
             'two_factor_secret' => null,
             'two_factor_recovery_codes' => null,
             'two_factor_confirmed_at' => null,
+            'timezone' => 'Asia/Jakarta',
+            'whatsapp_number' => null,
+            'whatsapp_verified_at' => null,
+            'whatsapp_enabled' => false,
+            'reminder_quiet_start' => '00:00:00',
+            'reminder_quiet_end' => '05:00:00',
         ];
     }
 
@@ -55,6 +61,18 @@ class UserFactory extends Factory
             'two_factor_secret' => encrypt('secret'),
             'two_factor_recovery_codes' => encrypt(json_encode(['recovery-code-1'])),
             'two_factor_confirmed_at' => now(),
+        ]);
+    }
+
+    /**
+     * Indicate that the model has a verified WhatsApp number with reminders enabled.
+     */
+    public function withVerifiedWhatsApp(string $number = '6281234567890'): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'whatsapp_number' => $number,
+            'whatsapp_verified_at' => now(),
+            'whatsapp_enabled' => true,
         ]);
     }
 }
