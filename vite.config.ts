@@ -35,6 +35,8 @@ export default defineConfig({
     },
     lint: {
         ignorePatterns: [
+            '.agents/**',
+            '.github/**',
             'vendor/**',
             'node_modules/**',
             'public/**',
