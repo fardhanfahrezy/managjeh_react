@@ -147,4 +147,3 @@ Karena seluruh tugas kuliah, jadwal, dan riwayat percakapan pengguna tunggal ter
 ## 7. TODO (`UNKNOWN`)
 
 - [ ] Memutuskan platform hosting gratis final yang akan digunakan (`UNKNOWN` di PRD).
-- [ ] Menambahkan service PostgreSQL pada `.github/workflows/tests.yml` agar pipeline CI GitHub Actions berjalan selaras dengan `phpunit.xml` (`pgsql`).

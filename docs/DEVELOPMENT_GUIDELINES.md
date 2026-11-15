@@ -128,5 +128,4 @@ Setiap perubahan pada skema database, aturan bisnis, alur pengingat, integrasi p
 
 ## 6. TODO
 
-- [ ] Menginisialisasi Git repository (`.git`) dan menetapkan konvensi commit/branching.
-- [ ] Menambahkan service PostgreSQL pada `.github/workflows/tests.yml` agar `composer ci:check` berjalan penuh di CI.
+- [ ] Menetapkan konvensi commit/branching (mis. Conventional Commits) dan aturan branch protection untuk `main`.
