@@ -1,0 +1,221 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-15T23:10:00+07:00",
+  "title": "Design System: Managjeh",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Shamrock Emerald",
+        "canonical": "#059669",
+        "tonalRamp": [
+          "#022c22",
+          "#064e3b",
+          "#065f46",
+          "#047857",
+          "#059669",
+          "#10b981",
+          "#6ee7b7",
+          "#ecfdf5"
+        ]
+      },
+      "secondary": {
+        "role": "secondary",
+        "displayName": "Ochre Amber",
+        "canonical": "#d97706",
+        "tonalRamp": [
+          "#451a03",
+          "#78350f",
+          "#92400e",
+          "#b45309",
+          "#d97706",
+          "#f59e0b",
+          "#fcd34d",
+          "#fffbeb"
+        ]
+      },
+      "bright-snow": {
+        "role": "neutral",
+        "displayName": "Bright Snow",
+        "canonical": "#fafaf9",
+        "tonalRamp": [
+          "#1c1917",
+          "#292524",
+          "#44403c",
+          "#57534e",
+          "#a8a29e",
+          "#e7e5e4",
+          "#f5f5f4",
+          "#fafaf9"
+        ]
+      },
+      "pure-white": {
+        "role": "neutral",
+        "displayName": "Pure White",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#1c1917",
+          "#292524",
+          "#57534e",
+          "#a8a29e",
+          "#d6d3d1",
+          "#e7e5e4",
+          "#f5f5f4",
+          "#ffffff"
+        ]
+      },
+      "carbon-black": {
+        "role": "neutral",
+        "displayName": "Carbon Black",
+        "canonical": "#1c1917",
+        "tonalRamp": [
+          "#1c1917",
+          "#292524",
+          "#44403c",
+          "#57534e",
+          "#78716c",
+          "#a8a29e",
+          "#e7e5e4",
+          "#fafaf9"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Judul halaman utama dan sapaan kontekstual di Dashboard."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Kepala bagian utama seperti 3 Prioritas AI Planner atau judul proyek."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Judul kartu, judul dialog, dan judul tugas utama."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Deskripsi tugas, catatan kalender, dan teks form."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Badge status/prioritas, label metadata, dan jam jadwal."
+      }
+    },
+    "shadows": [
+      {
+        "name": "subtle-rest",
+        "value": "0 1px 2px 0 rgba(28, 25, 23, 0.05)",
+        "purpose": "Bayangan nyaris tak terlihat pada kartu dan tombol standar."
+      },
+      {
+        "name": "floating-overlay",
+        "value": "0 10px 25px -5px rgba(28, 25, 23, 0.08), 0 4px 10px -6px rgba(28, 25, 23, 0.04)",
+        "purpose": "Elevasi untuk dialog, dropdown menu, toast, dan popover."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-standard",
+        "value": "cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "Transisi warna dan cincin fokus pada tombol, input, dan item navigasi."
+      }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Tombol aksi utama untuk menambah tugas, menyimpan perubahan, dan memicu AI Planner.",
+      "html": "<button class=\"ds-btn-primary\">Tambah Tugas</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 8px 16px; border: none; border-radius: 6px; background: var(--primary, #059669); color: var(--primary-foreground, #ffffff); font-family: Inter, sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; box-shadow: 0 1px 2px 0 rgba(28, 25, 23, 0.05); transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s cubic-bezier(0.4, 0, 0.2, 1); } .ds-btn-primary:hover { background: #047857; } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.35); }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Tombol aksi sekunder dengan batas tipis untuk filter, batal, atau tindakan pendamping.",
+      "html": "<button class=\"ds-btn-outline\">Filter</button>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 8px 16px; border: 1px solid var(--border, #e7e5e4); border-radius: 6px; background: var(--card, #ffffff); color: var(--foreground, #1c1917); font-family: Inter, sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; box-shadow: 0 1px 2px 0 rgba(28, 25, 23, 0.05); transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1); } .ds-btn-outline:hover { background: var(--secondary, #f5f5f4); } .ds-btn-outline:focus-visible { outline: none; border-color: var(--ring, #059669); box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.35); }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Kolom input teks standar untuk judul tugas, pencarian, dan pengaturan.",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"Cari tugas atau proyek...\" />",
+      "css": ".ds-input { width: 100%; height: 36px; padding: 4px 12px; border: 1px solid var(--input, #e7e5e4); border-radius: 6px; background: var(--card, #ffffff); color: var(--foreground, #1c1917); font-family: Inter, sans-serif; font-size: 14px; outline: none; box-shadow: 0 1px 2px 0 rgba(28, 25, 23, 0.05); transition: border-color 0.15s, box-shadow 0.15s; } .ds-input::placeholder { color: var(--muted-foreground, #57534e); } .ds-input:focus-visible { border-color: var(--ring, #059669); box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.25); }"
+    },
+    {
+      "name": "Surface Card",
+      "kind": "card",
+      "refersTo": "card-surface",
+      "description": "Wadah utama untuk ringkasan prioritas, daftar tugas, dan progres proyek.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-title\">Prioritas Hari Ini</div><p class=\"ds-card-desc\">3 fokus utama dari AI Planner</p></div>",
+      "css": ".ds-card { display: flex; flex-direction: column; gap: 6px; padding: 24px; border: 1px solid var(--border, #e7e5e4); border-radius: 12px; background: var(--card, #ffffff); color: var(--card-foreground, #1c1917); font-family: Inter, sans-serif; box-shadow: 0 1px 2px 0 rgba(28, 25, 23, 0.05); } .ds-card-title { font-size: 16px; font-weight: 600; line-height: 1.4; } .ds-card-desc { margin: 0; font-size: 14px; color: var(--muted-foreground, #57534e); }"
+    },
+    {
+      "name": "Status Chip",
+      "kind": "chip",
+      "description": "Penanda ringkas untuk prioritas tugas dan status pengingat.",
+      "html": "<span class=\"ds-chip-warning\">Deadline Hari Ini</span>",
+      "css": ".ds-chip-warning { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 6px; border: 1px solid rgba(217, 119, 6, 0.25); background: #fffbeb; color: #b45309; font-family: Inter, sans-serif; font-size: 12px; font-weight: 500; }"
+    },
+    {
+      "name": "Sidebar Nav Item",
+      "kind": "nav",
+      "description": "Item navigasi utama pada sidebar kiri.",
+      "html": "<a class=\"ds-nav-item ds-nav-active\" href=\"#\">Dashboard</a>",
+      "css": ".ds-nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 6px; color: var(--muted-foreground, #57534e); font-family: Inter, sans-serif; font-size: 14px; font-weight: 500; text-decoration: none; transition: background-color 0.15s, color 0.15s; } .ds-nav-item:hover, .ds-nav-active { background: var(--sidebar-accent, #f5f5f4); color: var(--sidebar-foreground, #1c1917); font-weight: 600; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Desk",
+    "overview": "Managjeh dirancang seperti meja belajar yang rapi, terang, dan bebas distraksi bagi mahasiswa yang harus mengelola banyak tenggat waktu sekaligus. Kanvas hangat menyerupai kertas studio dipadukan dengan tinta karbon yang tegas serta satu aksen utama zamrud untuk aksi prioritas, sehingga mata pengguna langsung tertuju pada pekerjaan yang paling penting hari ini.\n\nSeluruh antarmuka menggunakan keluarga tipografi tunggal Inter yang dibundel secara lokal untuk menjaga kecepatan muat dan konsistensi metrik angka pada tenggat waktu, jam kuliah, serta persentase progres proyek. Pemisahan area kerja mengandalkan tonal layering dan garis batas tipis yang tenang alih-alih dekorasi berlebih atau bayangan tebal.",
+    "keyCharacteristics": [
+      "Kanvas hangat Bright Snow dipadukan permukaan kartu Pure White dan teks Carbon Black berkonotasi editorial produktivitas.",
+      "Satu aksen primer Shamrock Emerald untuk aksi utama serta Ochre Amber khusus untuk sinyal perhatian/tenggat mendekat.",
+      "Sistem tipografi tunggal Inter (variable font lokal) dengan angka tabular untuk jadwal, durasi, dan metrik progres.",
+      "Permukaan datar berlapis dengan border tipis dan elevasi bayangan minimal hanya pada popover atau dialog aktif."
+    ],
+    "rules": [
+      {
+        "name": "The One Accent Rule",
+        "body": "Aksen Shamrock Emerald dibatasi hanya untuk aksi primer, status aktif, dan fokus; elemen sekunder wajib tetap berada dalam spektrum netral batu hangat.",
+        "section": "colors"
+      },
+      {
+        "name": "The Signal Restraint Rule",
+        "body": "Ochre Amber dan Crimson Alert hanya boleh muncul sebagai sinyal status nyata (prioritas tinggi, konflik jadwal, overdue, atau error), bukan sebagai hiasan kartu.",
+        "section": "colors"
+      },
+      {
+        "name": "The Single-Family Rule",
+        "body": "Seluruh antarmuka hanya memuat keluarga font lokal Inter (variable font); font eksternal lain dilarang dimuat agar tidak terjadi pergeseran tata letak atau inkonsistensi metrik.",
+        "section": "typography"
+      },
+      {
+        "name": "The Quiet Surface Rule",
+        "body": "Kartu pada posisi diam tidak boleh menggunakan bayangan besar atau efek glow; pemisahan utama selalu mengandalkan kontras lapisan dan garis batas 1px.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do gunakan Inter lokal untuk seluruh teks dan aktifkan tabular-nums pada jam, tanggal, dan persentase progres proyek.",
+      "Do pertahankan Shamrock Emerald (#059669) hanya untuk aksi utama, status aktif, dan fokus agar hirarki visual tetap tenang.",
+      "Do pisahkan kartu dan panel menggunakan lapisan permukaan + border tipis 1px (#e7e5e4)."
+    ],
+    "donts": [
+      "Don't memuat kembali font eksternal seperti Instrument Sans atau Bunny/Google Fonts di vite.config.ts maupun app.blade.php.",
+      "Don't menggunakan warna Ochre Amber (#d97706) atau merah sebagai latar kartu penuh atau hiasan dekoratif.",
+      "Don't menumpuk bayangan tebal, gradien mencolok, atau efek glassmorphism pada kartu kerja harian."
+    ]
+  }
+}
