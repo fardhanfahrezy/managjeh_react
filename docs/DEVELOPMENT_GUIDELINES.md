@@ -35,6 +35,7 @@ Kerjakan **satu phase pada satu waktu**, jalankan verifikasi di akhir setiap pha
 ### PHASE 2 — Task & Project UI + Settings Timezone/WhatsApp
 
 #### 2.1 Backend yang Harus Dibuat di Phase 2
+
 1. **`app/Http/Controllers/ProjectController.php`:**
     - `index(Request $request)`: ambil `$request->user()->projects()->withProgressCounts()`, dukung filter `status` (`active`/`completed`/`archived`), urutkan berdasarkan `due_date` & `created_at`, kembalikan `Inertia::render('projects/index', [...])`.
     - `store(StoreProjectRequest $request)`: `$request->user()->projects()->create($request->validated())`, redirect dengan flash toast.
@@ -55,6 +56,7 @@ Kerjakan **satu phase pada satu waktu**, jalankan verifikasi di akhir setiap pha
     - Jalankan `php artisan wayfinder:generate` agar route helper TypeScript ter-generate di `resources/js/routes/` dan `resources/js/actions/`.
 
 #### 2.2 Frontend yang Harus Dibuat/Diubah di Phase 2
+
 1. **Types (`resources/js/types/models.ts`):** Buat tipe TypeScript `Project`, `Task`, `ProjectStatus`, `TaskStatus`, `TaskPriority` lalu ekspor dari `resources/js/types/index.ts`.
 2. **Sidebar (`resources/js/components/app-sidebar.tsx`):** Tambahkan menu navigasi ke `Dashboard`, `Tasks`, `Projects` (dan siapkan slot `Calendar` & `AI Planner`).
 3. **Halaman `resources/js/pages/tasks/index.tsx`:**
@@ -69,6 +71,7 @@ Kerjakan **satu phase pada satu waktu**, jalankan verifikasi di akhir setiap pha
     - Tambahkan input `timezone` (select dari prop `timezones`), `whatsapp_number`, checkbox `whatsapp_enabled`, `reminder_quiet_start`, dan `reminder_quiet_end` (default `00:00`–`05:00`), serta indikator status verifikasi WhatsApp (`whatsapp_verified_at`).
 
 #### 2.3 Test Wajib Phase 2 (`tests/Feature/TaskAndProjectCrudTest.php`)
+
 - User dapat melihat halaman `/tasks` dan `/projects`, membuat, mengubah, memfilter, dan mengarsipkan/menghapus task & project miliknya.
 - User mendapatkan `403 Forbidden` jika mencoba melihat/mengubah/menghapus task atau project milik user lain.
 
@@ -77,6 +80,7 @@ Kerjakan **satu phase pada satu waktu**, jalankan verifikasi di akhir setiap pha
 ### PHASE 3 — Calendar & Agenda Berulang (`D-08`, `D-10`)
 
 #### 3.1 Backend yang Harus Dibuat di Phase 3
+
 1. **Migration:** `database/migrations/2026_11_15_000004_create_calendar_events_table.php` sesuai spesifikasi di [docs/DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) Section 3.1.
 2. **Model & Factory & Policy:**
     - `app/Models/CalendarEvent.php` (dengan `SoftDeletes`, validasi konsistensi `is_all_day` vs `starts_at`/`ends_at` vs `start_date`/`end_date`, serta validasi kepemilikan `project_id` & `task_id`).
@@ -90,11 +94,13 @@ Kerjakan **satu phase pada satu waktu**, jalankan verifikasi di akhir setiap pha
     - `CalendarEventController.php`: menampilkan agenda + deadline `tasks` dalam rentang tanggal tampilan (`day`, `week`, `month` berdasarkan `$user->timezone`).
 
 #### 3.2 Frontend yang Harus Dibuat di Phase 3
-- `resources/js/pages/calendar/index.tsx`: tampilan kalender Harian, Mingguan, dan Bulanan; menampilkan agenda berjam, agenda *all-day*, agenda berulang, dan badge deadline tugas (`tasks.due_at`); modal buat/edit agenda (termasuk pilihan pengulangan dan opsi edit 1 kejadian vs seluruh rangkaian); banner peringatan jika ada jadwal bentrok.
+
+- `resources/js/pages/calendar/index.tsx`: tampilan kalender Harian, Mingguan, dan Bulanan; menampilkan agenda berjam, agenda _all-day_, agenda berulang, dan badge deadline tugas (`tasks.due_at`); modal buat/edit agenda (termasuk pilihan pengulangan dan opsi edit 1 kejadian vs seluruh rangkaian); banner peringatan jika ada jadwal bentrok.
 
 #### 3.3 Test Wajib Phase 3 (`tests/Feature/CalendarEventTest.php`)
-- Konversi waktu UTC <-> `users.timezone` untuk agenda berjam dan *all-day* (termasuk di sekitar pergantian hari `00:00` lokal).
-- Ekspansi agenda berulang (`D-08`), pengubahan satu kejadian (*single occurrence*), pengecualian tanggal, dan pembatalan kejadian.
+
+- Konversi waktu UTC <-> `users.timezone` untuk agenda berjam dan _all-day_ (termasuk di sekitar pergantian hari `00:00` lokal).
+- Ekspansi agenda berulang (`D-08`), pengubahan satu kejadian (_single occurrence_), pengecualian tanggal, dan pembatalan kejadian.
 - Peringatan konflik jadwal dikembalikan dengan benar tanpa menggagalkan penyimpanan.
 
 ---
@@ -102,6 +108,7 @@ Kerjakan **satu phase pada satu waktu**, jalankan verifikasi di akhir setiap pha
 ### PHASE 4 — Dashboard Aggregation
 
 #### 4.1 Backend yang Harus Dibuat di Phase 4
+
 1. **`app/Services/DashboardAggregatorService.php`:**
     - Menghitung seluruh data dashboard secara efisien (tanpa N+1 query) berdasarkan `$user->timezone`:
         1. `greeting` & `local_date`
@@ -122,6 +129,7 @@ Kerjakan **satu phase pada satu waktu**, jalankan verifikasi di akhir setiap pha
 ### PHASE 5 — WhatsApp Reminder (`D-02`, `D-05`, `D-06`, `D-07`, `D-14`)
 
 #### 5.1 Backend yang Harus Dibuat di Phase 5
+
 1. **Migration & Model:**
     - `database/migrations/2026_11_15_000005_create_reminders_table.php` sesuai [docs/DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) Section 3.2.
     - `app/Enums/ReminderStatus.php` (`Pending`, `Processing`, `Sent`, `Failed`, `Cancelled`).
@@ -144,6 +152,7 @@ Kerjakan **satu phase pada satu waktu**, jalankan verifikasi di akhir setiap pha
 ### PHASE 6 — AI Planner (`D-03`, `D-04`, `D-07`, `D-12`, `D-13`, `D-15`)
 
 #### 6.1 Backend yang Harus Dibuat di Phase 6
+
 1. **Migration & Model:**
     - `database/migrations/2026_11_15_000006_create_ai_planner_runs_table.php` sesuai [docs/DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) Section 3.3.
     - `app/Enums/AiPlannerRunStatus.php` (`Pending`, `Success`, `Failed`).

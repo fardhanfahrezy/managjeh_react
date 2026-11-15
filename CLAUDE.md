@@ -6,11 +6,11 @@ Instruksi kerja **Managjeh — Personal OS Mahasiswa (Technical Specification MV
 
 ## 1. Gambaran Produk & Arsitektur (`FACT` + `REQUIREMENT`)
 
-- **Produk:** Personal OS untuk mahasiswa (*single-user sekarang, arsitektur siap multi-user* dengan kepemilikan `user_id` di seluruh tabel).
+- **Produk:** Personal OS untuk mahasiswa (_single-user sekarang, arsitektur siap multi-user_ dengan kepemilikan `user_id` di seluruh tabel).
 - **Cakupan MVP 1:**
     1. **Task Management** (`tasks`: status `todo`/`in_progress`/`completed`/`cancelled`, prioritas `low`/`medium`/`high`/`urgent`, `due_at` UTC, `project_id`, `parent_id` maks. 1 level sesuai `D-09`, soft delete `D-11`).
     2. **Project Management** (`projects`: status `active`/`completed`/`archived`, `start_date`, `due_date`, kalkulasi progres otomatis dari task non-cancelled, soft delete `D-11`).
-    3. **Calendar & Agenda Berulang** (`calendar_events`: agenda berjam dalam UTC, agenda *all-day* dalam `date` lokal, serta dukungan *recurrence rule*, override satu kejadian, dan exception sesuai `D-08`).
+    3. **Calendar & Agenda Berulang** (`calendar_events`: agenda berjam dalam UTC, agenda _all-day_ dalam `date` lokal, serta dukungan _recurrence rule_, override satu kejadian, dan exception sesuai `D-08`).
     4. **Dashboard** (`/dashboard`: greeting & tanggal lokal, ringkasan tugas hari ini, deadline terdekat, agenda hari ini, progres proyek aktif, 3 prioritas AI Planner, status WhatsApp, ringkasan tugas selesai).
     5. **WhatsApp Reminder** (`reminders`: kanal pengiriman pengingat satu arah melalui `WhatsAppGatewayInterface` `D-02`, verifikasi nomor OTP/gateway wajib `D-14`, multi-reminder per task `D-05` & `D-07`, quiet hours `00:00–05:00` waktu lokal pengguna `D-06`).
     6. **AI Planner** (`ai_planner_runs`: rekomendasi maksimal 3 prioritas harian dengan urutan fallback `Gemini` → `Grok` → `OpenRouter` → `Rule-based Fallback` sesuai `D-03` & `D-04`, dipicu otomatis via Scheduler/perubahan data relevan maupun manual sesuai `D-12`).

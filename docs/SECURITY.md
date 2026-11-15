@@ -36,6 +36,6 @@ Dokumen ini mendokumentasikan mekanisme keamanan dan privasi yang telah diterapk
     - Jangan pernah mengeksekusi perintah perubahan data tugas/agenda dari pesan masuk WhatsApp pada MVP 1.
 4. **Rate Limiting & Circuit Breaker AI (`D-13`):**
     - Terapkan rate limit pada endpoint manual `POST /ai-planner/generate` dan `POST /settings/whatsapp/send-otp`.
-    - Terapkan *circuit breaker* pada `AiPlannerService` agar kegagalan beruntun pada satu provider tidak memicu banjir request keluar.
+    - Terapkan _circuit breaker_ pada `AiPlannerService` agar kegagalan beruntun pada satu provider tidak memicu banjir request keluar.
 5. **Retensi Data & Ekspor/Penghapusan (`D-11`, `D-15`):**
     - Sediakan command terjadwal di Phase 7 untuk menghapus permanen data soft-deleted dan log `reminders` / `ai_planner_runs` yang melewati batas masa retensi.

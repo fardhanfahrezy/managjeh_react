@@ -43,7 +43,12 @@ export type User = {
 export type ProjectStatus = 'active' | 'completed' | 'archived';
 export type TaskStatus = 'todo' | 'in_progress' | 'completed' | 'cancelled';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
-export type ReminderStatus = 'pending' | 'processing' | 'sent' | 'failed' | 'cancelled';
+export type ReminderStatus =
+    | 'pending'
+    | 'processing'
+    | 'sent'
+    | 'failed'
+    | 'cancelled';
 export type AiPlannerRunStatus = 'pending' | 'success' | 'failed';
 
 export type Project = {
@@ -53,9 +58,9 @@ export type Project = {
     description: string | null;
     status: ProjectStatus;
     start_date: string | null; // YYYY-MM-DD
-    due_date: string | null;   // YYYY-MM-DD
+    due_date: string | null; // YYYY-MM-DD
     completed_at: string | null;
-    progress: number;          // 0 - 100
+    progress: number; // 0 - 100
     completed_tasks_count?: number;
     non_cancelled_tasks_count?: number;
     tasks?: Task[];
@@ -72,7 +77,7 @@ export type Task = {
     description: string | null;
     status: TaskStatus;
     priority: TaskPriority;
-    due_at: string | null;       // ISO UTC
+    due_at: string | null; // ISO UTC
     due_at_local?: string | null; // Formatted in user's timezone
     completed_at: string | null;
     sort_order: number;
@@ -92,9 +97,9 @@ export type CalendarEvent = {
     title: string;
     description: string | null;
     starts_at: string | null; // ISO UTC (when is_all_day = false)
-    ends_at: string | null;   // ISO UTC (when is_all_day = false)
+    ends_at: string | null; // ISO UTC (when is_all_day = false)
     start_date: string | null; // YYYY-MM-DD (when is_all_day = true)
-    end_date: string | null;   // YYYY-MM-DD (when is_all_day = true)
+    end_date: string | null; // YYYY-MM-DD (when is_all_day = true)
     is_all_day: boolean;
     is_cancelled: boolean;
     recurrence_rule: string | null;
@@ -145,15 +150,15 @@ export type AiPlannerRun = {
 
 Setiap halaman wajib menyediakan: **Loading state**, **Empty state**, **Error state**, **Success toast (`sonner`)**, **Validation feedback (`InputError`)**, **Responsive layout**, dan **Keyboard accessibility**.
 
-| No | Halaman MVP | Path Komponen (`resources/js/pages/`) | Phase | Status Aktual (`FACT`) |
-| :--- | :--- | :--- | :--- | :--- |
-| **1** | **Dashboard** | `dashboard.tsx` (`/dashboard`) | Phase 4 | `Partially Implemented` (masih `PlaceholderPattern`) |
-| **2** | **Tasks List** | `tasks/index.tsx` (`/tasks`) | Phase 2 | `Not Implemented` |
-| **3** | **Task Detail / Form Modal** | `components/tasks/task-form-dialog.tsx` | Phase 2 | `Not Implemented` |
-| **4** | **Projects List** | `projects/index.tsx` (`/projects`) | Phase 2 | `Not Implemented` |
-| **5** | **Project Detail** | `projects/show.tsx` (`/projects/{project}`) | Phase 2 | `Not Implemented` |
-| **6** | **Calendar** | `calendar/index.tsx` (`/calendar`) | Phase 3 | `Not Implemented` |
-| **7** | **AI Planner** | `ai-planner/index.tsx` (`/ai-planner`) | Phase 6 | `Not Implemented` |
+| No    | Halaman MVP                        | Path Komponen (`resources/js/pages/`)        | Phase         | Status Aktual (`FACT`)                                                                              |
+| :---- | :--------------------------------- | :------------------------------------------- | :------------ | :-------------------------------------------------------------------------------------------------- |
+| **1** | **Dashboard**                      | `dashboard.tsx` (`/dashboard`)               | Phase 4       | `Partially Implemented` (masih `PlaceholderPattern`)                                                |
+| **2** | **Tasks List**                     | `tasks/index.tsx` (`/tasks`)                 | Phase 2       | `Not Implemented`                                                                                   |
+| **3** | **Task Detail / Form Modal**       | `components/tasks/task-form-dialog.tsx`      | Phase 2       | `Not Implemented`                                                                                   |
+| **4** | **Projects List**                  | `projects/index.tsx` (`/projects`)           | Phase 2       | `Not Implemented`                                                                                   |
+| **5** | **Project Detail**                 | `projects/show.tsx` (`/projects/{project}`)  | Phase 2       | `Not Implemented`                                                                                   |
+| **6** | **Calendar**                       | `calendar/index.tsx` (`/calendar`)           | Phase 3       | `Not Implemented`                                                                                   |
+| **7** | **AI Planner**                     | `ai-planner/index.tsx` (`/ai-planner`)       | Phase 6       | `Not Implemented`                                                                                   |
 | **8** | **Settings (Timezone & WhatsApp)** | `settings/profile.tsx` (`/settings/profile`) | Phase 1–2 & 5 | `Partially Implemented` (Backend siap di Phase 1; input UI ditambahkan di Phase 2 & OTP di Phase 5) |
 
 ### Detail Komponen Per Halaman
@@ -168,7 +173,7 @@ Setiap halaman wajib menyediakan: **Loading state**, **Empty state**, **Error st
     - Halaman detail (`projects/show.tsx`) menampilkan daftar tugas proyek terkait dan tombol tambah tugas ke proyek tersebut.
 4. **Calendar (`calendar/index.tsx` — Phase 3):**
     - Switcher tampilan `Day`, `Week`, `Month` berdasarkan `auth.user.timezone`.
-    - Menampilkan agenda berjam, agenda *all-day*, kejadian agenda berulang (`D-08`), dan deadline tugas (`tasks.due_at`).
+    - Menampilkan agenda berjam, agenda _all-day_, kejadian agenda berulang (`D-08`), dan deadline tugas (`tasks.due_at`).
     - Saat mengedit/menghapus agenda berulang, tampilkan pilihan: **"Hanya kejadian ini"** (`edit_scope = 'single'`) atau **"Seluruh rangkaian"** (`edit_scope = 'series'`).
 5. **AI Planner (`ai-planner/index.tsx` — Phase 6):**
     - Menampilkan rencana hari ini (`summary`, maksimal 3 `priorities` beserta `reason`, `suggested_action`, `estimated_minutes`, dan `warnings`).

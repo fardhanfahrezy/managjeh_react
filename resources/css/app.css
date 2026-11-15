@@ -9,7 +9,8 @@
 
 @font-face {
     font-family: 'Inter';
-    src: url('../fonts/Inter/Inter-VariableFont_opsz,wght.ttf') format('truetype');
+    src: url('../fonts/Inter/Inter-VariableFont_opsz,wght.ttf')
+        format('truetype');
     font-weight: 100 900;
     font-style: normal;
     font-display: swap;
@@ -17,7 +18,8 @@
 
 @font-face {
     font-family: 'Inter';
-    src: url('../fonts/Inter/Inter-Italic-VariableFont_opsz,wght.ttf') format('truetype');
+    src: url('../fonts/Inter/Inter-Italic-VariableFont_opsz,wght.ttf')
+        format('truetype');
     font-weight: 100 900;
     font-style: italic;
     font-display: swap;
@@ -160,6 +162,6 @@
     }
 
     body {
-        @apply bg-background text-foreground font-sans antialiased;
+        @apply bg-background font-sans text-foreground antialiased;
     }
 }

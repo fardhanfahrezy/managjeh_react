@@ -6,12 +6,12 @@ Dokumen ini mendokumentasikan kebutuhan infrastruktur, konfigurasi environment, 
 
 ## 1. Komponen Runtime yang Dibutuhkan
 
-| Komponen | Peran | Kebutuhan Produksi |
-| :--- | :--- | :--- |
-| **1. Web Server (PHP `^8.3` + Nginx/FrankenPHP/Caddy)** | Melayani aplikasi Laravel 13 + Inertia SSR/SPA | Wajib **HTTPS** (syarat mutlak untuk WebAuthn Passkeys dan keamanan sesi) |
-| **2. PostgreSQL (`>= 16`)** | Database utama (`DB_CONNECTION=pgsql`) | Timezone database & aplikasi menggunakan **UTC** |
-| **3. Laravel Queue Worker** | Menjalankan `SendWhatsAppMessageJob` & job AI Planner secara asynchronous | `php artisan queue:work database --tries=3 --backoff=15,60,180 --timeout=30` |
-| **4. Laravel Scheduler** | Memeriksa reminder jatuh tempo tiap menit, menjalankan AI Planner otomatis (`D-12`), & membersihkan retensi data (`D-11`, `D-15`) | Cron `* * * * * php artisan schedule:run` |
+| Komponen                                                | Peran                                                                                                                             | Kebutuhan Produksi                                                           |
+| :------------------------------------------------------ | :-------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------- |
+| **1. Web Server (PHP `^8.3` + Nginx/FrankenPHP/Caddy)** | Melayani aplikasi Laravel 13 + Inertia SSR/SPA                                                                                    | Wajib **HTTPS** (syarat mutlak untuk WebAuthn Passkeys dan keamanan sesi)    |
+| **2. PostgreSQL (`>= 16`)**                             | Database utama (`DB_CONNECTION=pgsql`)                                                                                            | Timezone database & aplikasi menggunakan **UTC**                             |
+| **3. Laravel Queue Worker**                             | Menjalankan `SendWhatsAppMessageJob` & job AI Planner secara asynchronous                                                         | `php artisan queue:work database --tries=3 --backoff=15,60,180 --timeout=30` |
+| **4. Laravel Scheduler**                                | Memeriksa reminder jatuh tempo tiap menit, menjalankan AI Planner otomatis (`D-12`), & membersihkan retensi data (`D-11`, `D-15`) | Cron `* * * * * php artisan schedule:run`                                    |
 
 ---
 

@@ -68,8 +68,8 @@ Dokumen ini menetapkan seluruh aturan bisnis yang wajib ditegakkan oleh backend 
     - `start_date` dan `due_date` bersifat opsional (`Y-m-d`).
     - Jika keduanya diisi, `due_date` wajib `>= start_date`.
 3. **Rumus Progres Proyek (`Project::calculateProgress()`):**
-    - Penyebut (*denominator*): jumlah seluruh tugas dalam proyek yang statusnya **bukan `cancelled`**.
-    - Pembilang (*numerator*): jumlah tugas dalam proyek yang statusnya **`completed`**.
+    - Penyebut (_denominator_): jumlah seluruh tugas dalam proyek yang statusnya **bukan `cancelled`**.
+    - Pembilang (_numerator_): jumlah tugas dalam proyek yang statusnya **`completed`**.
     - Jika penyebut = `0` (proyek belum punya tugas atau semua tugasnya `cancelled`), progres = `0%`.
     - Jika penyebut > `0`, progres = `round((completed / non_cancelled) * 100)`.
 4. **Kemandirian Status Tugas & Proyek:**
@@ -89,12 +89,12 @@ Dokumen ini menetapkan seluruh aturan bisnis yang wajib ditegakkan oleh backend 
         - `starts_at` dan `ends_at` **wajib `null`**.
 2. **Aturan Agenda Berulang (`D-08`):**
     - Agenda induk menyimpan `recurrence_rule` (mis. `FREQ=DAILY`, `FREQ=WEEKLY;BYDAY=MO,WE`, `FREQ=MONTHLY`) dan opsional `recurrence_until` (`date`).
-    - Ekspansi kejadian (*occurrences*) pada rentang tanggal kalender yang diminta dilakukan secara idempotent oleh `RecurrenceExpanderService`.
+    - Ekspansi kejadian (_occurrences_) pada rentang tanggal kalender yang diminta dilakukan secara idempotent oleh `RecurrenceExpanderService`.
     - **Mengubah seluruh rangkaian:** memperbarui baris agenda induk.
-    - **Mengubah satu kejadian (*single occurrence*):** membuat/memperbarui baris override di `calendar_events` dengan `parent_event_id = $master->id` dan `recurrence_id = '<tanggal/waktu kejadian asli>'`.
+    - **Mengubah satu kejadian (_single occurrence_):** membuat/memperbarui baris override di `calendar_events` dengan `parent_event_id = $master->id` dan `recurrence_id = '<tanggal/waktu kejadian asli>'`.
     - **Membatalkan/menghapus satu kejadian:** menambahkan identifier kejadian ke `recurrence_exceptions` (JSONB array) pada agenda induk atau menandai baris override dengan `is_cancelled = true`.
 3. **Deteksi Konflik Jadwal:**
-    - Apabila pengguna membuat/mengubah agenda berjam yang beririsan (`starts_at < existing.ends_at && ends_at > existing.starts_at`) dengan agenda lain milik pengguna tersebut, sistem **tetap mengizinkan penyimpanan** dan menyertakan informasi konflik sebagai peringatan (*warning*).
+    - Apabila pengguna membuat/mengubah agenda berjam yang beririsan (`starts_at < existing.ends_at && ends_at > existing.starts_at`) dengan agenda lain milik pengguna tersebut, sistem **tetap mengizinkan penyimpanan** dan menyertakan informasi konflik sebagai peringatan (_warning_).
 
 ---
 

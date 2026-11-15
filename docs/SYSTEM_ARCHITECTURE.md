@@ -8,7 +8,7 @@ Dokumen ini mendokumentasikan arsitektur sistem **Managjeh MVP 1**, memisahkan a
 
 - **Monorepo Full-Stack:** Laravel `13.42.0` (PHP `8.5.12`) + Inertia.js v3 (`3.7.0`) + React `19.2.0` + TypeScript + Tailwind CSS v4 + Laravel Wayfinder `0.1.23`.
 - **Database:** PostgreSQL (`managjeh` & `managjeh_test`). Semua timestamp absolut disimpan dalam **UTC**, sedangkan tampilan dan evaluasi jadwal mengikuti `users.timezone` (IANA timezone, default `Asia/Jakarta`).
-- **Model Kepemilikan:** *Single-user sekarang, arsitektur siap multi-user*. Seluruh tabel bisnis memiliki `user_id` dan dilindungi Policy. Registrasi publik dinonaktifkan (`D-01`).
+- **Model Kepemilikan:** _Single-user sekarang, arsitektur siap multi-user_. Seluruh tabel bisnis memiliki `user_id` dan dilindungi Policy. Registrasi publik dinonaktifkan (`D-01`).
 
 ---
 
