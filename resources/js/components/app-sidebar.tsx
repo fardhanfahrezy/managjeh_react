@@ -1,5 +1,12 @@
 import { Link } from '@inertiajs/react';
-import { BookOpen, FolderGit2, LayoutGrid } from 'lucide-react';
+import {
+    BookOpen,
+    CalendarDays,
+    CheckSquare,
+    FolderGit2,
+    FolderKanban,
+    LayoutGrid,
+} from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -14,6 +21,9 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import { index as calendarIndex } from '@/routes/calendar';
+import { index as projectsIndex } from '@/routes/projects';
+import { index as tasksIndex } from '@/routes/tasks';
 import type { NavItem } from '@/types';
 
 const mainNavItems: NavItem[] = [
@@ -21,6 +31,21 @@ const mainNavItems: NavItem[] = [
         title: 'Dashboard',
         href: dashboard(),
         icon: LayoutGrid,
+    },
+    {
+        title: 'Tasks',
+        href: tasksIndex(),
+        icon: CheckSquare,
+    },
+    {
+        title: 'Projects',
+        href: projectsIndex(),
+        icon: FolderKanban,
+    },
+    {
+        title: 'Calendar',
+        href: calendarIndex(),
+        icon: CalendarDays,
     },
 ];
 
