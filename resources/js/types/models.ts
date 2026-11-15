@@ -97,3 +97,64 @@ export type TaskOption = {
     title: string;
     status: TaskStatus;
 };
+
+export type DashboardTaskItem = {
+    id: number;
+    title: string;
+    status: TaskStatus;
+    priority: TaskPriority;
+    due_at: string | null;
+    due_at_local: string | null;
+    is_overdue: boolean;
+    project: ProjectSummary | null;
+};
+
+export type DashboardProjectItem = {
+    id: number;
+    name: string;
+    status: ProjectStatus;
+    due_date: string | null;
+    progress: number;
+    completed_tasks_count: number;
+    non_cancelled_tasks_count: number;
+};
+
+export type DashboardWhatsAppStatus = {
+    enabled: boolean;
+    verified: boolean;
+    can_receive: boolean;
+    number_masked: string | null;
+    quiet_hours: string;
+};
+
+export type DashboardCompletedSummary = {
+    today_count: number;
+    last_7_days_count: number;
+    active_count: number;
+};
+
+export type AiPlannerPriorityItem = {
+    task_id: number;
+    task_title?: string;
+    reason: string;
+    suggested_action: string;
+    estimated_minutes: number;
+};
+
+export type DashboardData = {
+    greeting: string;
+    local_date: string;
+    local_date_label: string;
+    timezone: string;
+    today_tasks: DashboardTaskItem[];
+    upcoming_tasks: DashboardTaskItem[];
+    today_events: CalendarEvent[];
+    active_projects: DashboardProjectItem[];
+    ai_priorities: {
+        summary?: string;
+        priorities: AiPlannerPriorityItem[];
+        provider?: string;
+    } | null;
+    whatsapp_status: DashboardWhatsAppStatus;
+    completed_summary: DashboardCompletedSummary;
+};
