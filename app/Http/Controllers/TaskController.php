@@ -7,6 +7,7 @@ use App\Enums\TaskStatus;
 use App\Http\Requests\Tasks\StoreTaskRequest;
 use App\Http\Requests\Tasks\UpdateTaskRequest;
 use App\Models\Task;
+use App\Services\Reminder\ReminderSynchronizer;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -17,6 +18,10 @@ use Inertia\Response;
 
 class TaskController extends Controller
 {
+    public function __construct(
+        private ReminderSynchronizer $reminderSynchronizer,
+    ) {}
+
     public function index(Request $request): Response
     {
         $user = $request->user();
@@ -76,7 +81,9 @@ class TaskController extends Controller
 
     public function store(StoreTaskRequest $request): RedirectResponse
     {
-        $request->user()->tasks()->create($request->normalizedValidated());
+        /** @var Task $task */
+        $task = $request->user()->tasks()->create($request->normalizedValidated());
+        $this->reminderSynchronizer->syncForTask($task);
 
         Inertia::flash('toast', [
             'type' => 'success',
@@ -89,6 +96,7 @@ class TaskController extends Controller
     public function update(UpdateTaskRequest $request, Task $task): RedirectResponse
     {
         $task->update($request->normalizedValidated());
+        $this->reminderSynchronizer->syncForTask($task);
 
         Inertia::flash('toast', [
             'type' => 'success',
@@ -103,6 +111,7 @@ class TaskController extends Controller
         Gate::authorize('delete', $task);
 
         $task->delete();
+        $this->reminderSynchronizer->cancelForTask($task);
 
         Inertia::flash('toast', [
             'type' => 'success',

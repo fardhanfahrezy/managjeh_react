@@ -9,6 +9,7 @@ use App\Models\CalendarEvent;
 use App\Models\Task;
 use App\Services\Calendar\RecurrenceExpanderService;
 use App\Services\Calendar\ScheduleConflictDetector;
+use App\Services\Reminder\ReminderSynchronizer;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,6 +22,7 @@ class CalendarEventController extends Controller
     public function __construct(
         private RecurrenceExpanderService $expander,
         private ScheduleConflictDetector $conflictDetector,
+        private ReminderSynchronizer $reminderSynchronizer,
     ) {}
 
     public function index(Request $request): Response
@@ -105,6 +107,7 @@ class CalendarEventController extends Controller
         $user = $request->user();
         /** @var CalendarEvent $event */
         $event = $user->calendarEvents()->create($request->normalizedValidated());
+        $this->reminderSynchronizer->syncForCalendarEvent($event);
 
         $conflicts = $this->detectConflictsForEvent($user->id, $event, $user->timezone);
 
@@ -166,6 +169,7 @@ class CalendarEventController extends Controller
             $updated = $calendarEvent;
         }
 
+        $this->reminderSynchronizer->syncForCalendarEvent($updated);
         $conflicts = $this->detectConflictsForEvent($user->id, $updated, $user->timezone);
 
         Inertia::flash('toast', [
@@ -210,6 +214,7 @@ class CalendarEventController extends Controller
         }
 
         $master->delete();
+        $this->reminderSynchronizer->cancelForCalendarEvent($master);
 
         Inertia::flash('toast', [
             'type' => 'success',
