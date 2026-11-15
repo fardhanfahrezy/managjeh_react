@@ -1,142 +1,176 @@
-# Development Guidelines — Managjeh (Asisten AI Mahasiswa)
+# Development Guidelines & Phase-by-Phase Implementation Cookbook — Managjeh (MVP 1)
 
-Dokumen ini menetapkan standar pengembangan, struktur direktori, konvensi kode, serta panduan teknis arsitektur untuk **Managjeh (Asisten AI Mahasiswa)** berdasarkan implementasi repository aktual (`FACT`) dan kebutuhan Blueprint/PRD (`REQUIREMENT`).
-
----
-
-## 1. Pemetaan Struktur Repository (`FACT` & `PLANNED`)
-
-_(Folder hasil generate seperti `node_modules/`, `vendor/`, `public/build/`, `bootstrap/ssr/`, dan `resources/js/{actions,routes,wayfinder}/` diabaikan dari pemetaan utama.)_
-
-### 1.1 Direktori Aktual Saat Ini (`FACT`)
-
-- **Backend (`app/`, `database/`, `routes/`, `config/`):**
-    - `app/Actions/Fortify/` — `CreateNewUser.php`, `ResetUserPassword.php`
-    - `app/Concerns/` — `PasswordValidationRules.php`, `ProfileValidationRules.php`
-    - `app/Http/Controllers/Settings/` — `ProfileController.php`, `SecurityController.php`
-    - `app/Http/Middleware/` — `HandleAppearance.php`, `HandleInertiaRequests.php`
-    - `app/Http/Requests/Settings/` — `ProfileUpdateRequest`, `ProfileDeleteRequest`, `PasswordUpdateRequest`, `TwoFactorAuthenticationRequest`
-    - `app/Models/` — `User.php`
-    - `app/Providers/` — `AppServiceProvider.php`, `FortifyServiceProvider.php`
-    - `database/migrations/` — 5 migrasi dasar (`users`, `cache`, `jobs`, `passkeys`, `two_factor`)
-    - `routes/` — `web.php`, `settings.php`, `console.php`
-- **Frontend (`resources/`):**
-    - `resources/js/pages/` — `welcome.tsx`, `dashboard.tsx`, `auth/*`, `settings/*`
-    - `resources/js/layouts/`, `resources/js/components/`, `resources/js/hooks/`, `resources/js/types/`, `resources/js/lib/`
-
-### 1.2 Penempatan Kode Baru yang Direncanakan (`PLANNED` — Minggu 1–6)
-
-Ikuti struktur konvensi Laravel 13 yang sudah ada saat menambahkan fitur `F1`–`F11`:
-
-- **Models (`app/Models/`):** `Task.php`, `Schedule.php`, `Reminder.php`, `Habit.php`, `HabitLog.php`, `Message.php`, `AiUsage.php`.
-- **Services (`app/Services/`):**
-    - `AiService.php` (orkestrasi Gemini -> Groq -> OpenRouter `:free` -> Templat tetap, serta pencatatan `ai_usage`).
-    - `WhatsAppService.php` (pengiriman pesan keluar ke gateway WhatsApp).
-    - `ReminderService.php` (evaluasi jam tenang `F5`, penjadwalan pengingat dari tenggat `F3`, dan snooze 30 menit `F4`).
-- **Jobs (`app/Jobs/`):** `SendReminderWhatsAppJob.php` (antrean pengiriman pengingat asinkron).
-- **Controllers (`app/Http/Controllers/`):** `DashboardController.php`, `TaskController.php`, `ScheduleController.php`, `HabitController.php`, `ChatController.php`, `WhatsAppWebhookController.php`.
-- **Form Requests (`app/Http/Requests/`):** Validasi terpisah untuk setiap mutasi `Task`, `Schedule`, `Habit`, dan `Webhook`.
-- **React Pages (`resources/js/pages/`):** `dashboard.tsx` (Beranda `"Hari ini"`), `tasks/index.tsx`, `schedules/index.tsx`, `chat/index.tsx`, `habits/index.tsx`.
+Dokumen ini disusun secara spesifik dan terperinci sebagai **panduan kerja langkah demi langkah bagi AI Coding Agent** (termasuk model AI yang lebih ringan/hemat biaya) untuk menyelesaikan **Phase 2 s.d. Phase 7** di atas fondasi **Phase 1** yang sudah selesai.
 
 ---
 
-## 2. Standar Pengembangan Fitur Inti Asisten AI Mahasiswa (`REQUIREMENT` & `RECOMMENDATION`)
+## 1. Apa yang Sudah Ada di Repository (`FACT` — Jangan Buat Ulang!)
 
-### 2.1 Service-Based AI Integration & Provider Fallback Pattern (`F7`–`F10`)
+Sebelum menulis kode baru, pahami file-file Phase 0 & Phase 1 yang **sudah terimplementasi dan lulus test**:
 
-1. **Satu Pintu Masuk (`AiService`):**
-    - Controller atau Queue Job **dilarang** memanggil endpoint HTTP Gemini/Groq/OpenRouter secara langsung. Seluruh interaksi AI harus melalui `App\Services\AiService`.
-2. **Urutan Fallback Berjenjang (`REQUIREMENT`):**
-    - Prioritas 1: **Gemini** (`GEMINI_API_KEY`).
-    - Prioritas 2: **Groq** (`GROQ_API_KEY`) — dipicu otomatis saat Gemini mengembalikan HTTP `429`, error `5xx`, exception koneksi, atau timeout.
-    - Prioritas 3: **OpenRouter** (`OPENROUTER_API_KEY`, wajib model berlabel `:free`) — dipicu saat Groq juga gagal.
-    - Prioritas 4: **Templat Tetap Tanpa AI** — dipicu saat ketiga provider gagal atau kuota harian di tabel `ai_usage` telah mencapai batas aman.
-3. **Kontrak Output JSON & Privasi:**
-    - Untuk Perencana Harian (`F7`) dan Pemecah Tugas (`F10`), minta respons JSON terstruktur dan validasi hasilnya dengan `json_decode` + pengecekan key wajib sebelum disimpan ke database.
-    - **Data Minimization Wajib:** Hanya teruskan data `tasks` dan `schedules` ke prompt AI. Jangan pernah menyertakan catatan harian, mood, atau `nomor_wa`.
-
-### 2.2 Queue-Based Notification Delivery & Scheduler Conventions (`F3`, `F5`)
-
-1. **Scheduler Ringan (`routes/console.php`):**
-    - Command yang dijadwalkan setiap menit (`everyMinute()`) hanya bertugas memeriksa pengingat jatuh tempo (`status = 'pending'` dan `kirim_pada <= now()`), mengevaluasi jam tenang (`F5`), mengubah status ke `processing`, lalu mendispatch Job ke Queue.
-    - Jangan melakukan panggilan HTTP lambat ke WhatsApp atau AI secara sinkron di dalam loop utama Scheduler.
-2. **Queue Job dengan Retry & Backoff:**
-    - Setiap Job pengiriman WhatsApp harus mendefinisikan `$tries` (mis. `3`), `$backoff` (mis. `[15, 60, 180]`), dan `$timeout` (mis. `30`).
-    - Implementasikan method `failed(Throwable $exception)` pada Job untuk mengubah `reminders.status` menjadi `'failed'` agar kegagalan terlihat di Beranda `"Hari ini"`.
-
-### 2.3 Webhook Security (`F4`, `F9`)
-
-1. **Verifikasi Token & Nomor Pengirim:**
-    - Gunakan middleware khusus atau pemeriksaan awal di `WhatsAppWebhookController` yang memvalidasi `WHATSAPP_WEBHOOK_SECRET` menggunakan `hash_equals()`.
-    - Cocokkan nomor pengirim dengan `users.nomor_wa` pengguna tunggal. Tolak seluruh nomor lain dengan HTTP `403` sebelum memproses logika bisnis.
-2. **Normalisasi Perintah Satu Kata:**
-    - Gunakan `Str::lower(trim($incomingText))` saat mencocokkan perintah `"selesai"` dan `"tunda"`.
-
-### 2.4 Database Transactions & Idempotency
-
-1. **Transaksi Database (`DB::transaction`):**
-    - Gunakan `DB::transaction()` saat:
-        - Menyimpan subtugas hasil pemecahan AI (`F10`) ke tabel `tasks`.
-        - Memproses balasan webhook `"selesai"` (mengubah `tasks.status` sekaligus membatalkan/memperbarui `reminders` terkait).
-        - Mengambil pengingat `pending` di Scheduler dan mengubahnya menjadi `processing` (gunakan `lockForUpdate()` bila perlu).
-2. **Idempotency:**
-    - Pastikan pengingat yang sedang diproses (`processing`) atau sudah terkirim (`sent`) tidak dikirim ulang oleh Scheduler menit berikutnya.
-    - Simpan `external_message_id` pada pesan webhook masuk untuk mencegah eksekusi ganda apabila gateway mengirim ulang webhook yang sama.
-
-### 2.5 Timezone Handling (`UTC` <-> `Asia/Jakarta`) (`REQUIREMENT`)
-
-1. **Penyimpanan Backend:**
-    - `config/app.php` menggunakan `'timezone' => 'UTC'` (`FACT`) dan `CarbonImmutable` sudah aktif secara global (`FACT`).
-    - Seluruh kolom timestamp di PostgreSQL disimpan dalam **UTC**.
-2. **Konversi Input & Evaluasi Lokal:**
-    - Saat menerima input tenggat atau jam dari pengguna, parse menggunakan zona waktu pengguna (`$user->zona_waktu ?? 'Asia/Jakarta'`) lalu panggil `->utc()` sebelum disimpan ke database.
-    - Saat mengevaluasi batas "Hari ini" (`F6`), jam tenang (`F5`), atau tanggal kebiasaan (`F11`), hitung rentang waktu berdasarkan `CarbonImmutable::now($userTimezone)` lalu konversikan batas `startOfDay()` / `endOfDay()` ke UTC untuk query database.
-    - **Wajib diuji pada jam kritis:** sekitar pukul `00:00 WIB` (`17:00 UTC` hari sebelumnya).
+- **Enums (`app/Enums/`):**
+    - [ProjectStatus.php](../app/Enums/ProjectStatus.php): `Active = 'active'`, `Completed = 'completed'`, `Archived = 'archived'` (`ProjectStatus::values()`).
+    - [TaskStatus.php](../app/Enums/TaskStatus.php): `Todo = 'todo'`, `InProgress = 'in_progress'`, `Completed = 'completed'`, `Cancelled = 'cancelled'` (`$status->isActive()`).
+    - [TaskPriority.php](../app/Enums/TaskPriority.php): `Low = 'low'`, `Medium = 'medium'`, `High = 'high'`, `Urgent = 'urgent'`.
+- **Models (`app/Models/`):**
+    - [User.php](../app/Models/User.php): memiliki relasi `projects()`, `tasks()`, dan helper `canReceiveWhatsAppReminders(): bool`.
+    - [Project.php](../app/Models/Project.php): memiliki `SoftDeletes`, relasi `user()`, `tasks()`, scope `withProgressCounts()`, dan method `calculateProgress(): int`.
+    - [Task.php](../app/Models/Task.php): memiliki `SoftDeletes`, relasi `user()`, `project()`, `parent()`, `subtasks()`, scope `active()`, method `isActive(): bool`, method `dueAtInUserTimezone(?string $timezone = null)`, serta validasi otomatis kepemilikan lintas-user & kedalaman subtugas maks. 1 level (`D-09`).
+- **Policies (`app/Policies/`):**
+    - [ProjectPolicy.php](../app/Policies/ProjectPolicy.php) & [TaskPolicy.php](../app/Policies/TaskPolicy.php).
+- **Form Requests (`app/Http/Requests/`):**
+    - [StoreProjectRequest.php](../app/Http/Requests/Projects/StoreProjectRequest.php) & [UpdateProjectRequest.php](../app/Http/Requests/Projects/UpdateProjectRequest.php).
+    - [StoreTaskRequest.php](../app/Http/Requests/Tasks/StoreTaskRequest.php) & [UpdateTaskRequest.php](../app/Http/Requests/Tasks/UpdateTaskRequest.php) — keduanya memiliki method `$request->normalizedValidated()` yang otomatis mengonversi `due_at` dari `$user->timezone` ke UTC!
+- **CLI Provisioning (`D-01`):**
+    - [ProvisionUserCommand.php](../app/Console/Commands/ProvisionUserCommand.php) (`php artisan user:provision`).
 
 ---
 
-## 3. Coding Conventions & Tooling (`FACT`)
+## 2. Panduan Eksekusi Detail Per Phase (Untuk AI Agent)
 
-### 3.1 PHP / Laravel Standards
-
-- Gunakan explicit type hints parameter & return type, serta kurung kurawal `{}` pada seluruh control structures.
-- Gunakan `php artisan make:* --no-interaction` untuk membuat file baru.
-- Jalankan `vendor/bin/pint --dirty --format agent` (atau `composer lint`) setelah memodifikasi file PHP.
-- Pertahankan kepatuhan PHPStan/Larastan level 7 (`composer types:check`).
-
-### 3.2 React / TypeScript / Inertia v3 Standards
-
-- TypeScript `strict: true` (`npm run types:check`).
-- Gunakan komponen `<Form>`, `<Link>`, `router`, dan `useHttp()` dari `@inertiajs/react` (Axios tidak digunakan).
-- Selalu gunakan route/action helper dari **Laravel Wayfinder** (`@/routes/*`, `@/actions/*`).
-- Nama file frontend menggunakan `kebab-case` dan mengikuti konfigurasi formatter di `vite.config.ts` (`npm run check`).
+Kerjakan **satu phase pada satu waktu**, jalankan verifikasi di akhir setiap phase, dan jangan melompat ke phase berikutnya sebelum seluruh test hijau.
 
 ---
 
-## 4. Testing Requirements (`REQUIREMENT` & `FACT`)
+### PHASE 2 — Task & Project UI + Settings Timezone/WhatsApp
 
-Setiap penambahan atau perubahan fitur `F1`–`F11` wajib disertai pengujian otomatis menggunakan **Pest v5** terhadap database `managjeh_test`:
+#### 2.1 Backend yang Harus Dibuat di Phase 2
+1. **`app/Http/Controllers/ProjectController.php`:**
+    - `index(Request $request)`: ambil `$request->user()->projects()->withProgressCounts()`, dukung filter `status` (`active`/`completed`/`archived`), urutkan berdasarkan `due_date` & `created_at`, kembalikan `Inertia::render('projects/index', [...])`.
+    - `store(StoreProjectRequest $request)`: `$request->user()->projects()->create($request->validated())`, redirect dengan flash toast.
+    - `show(Request $request, Project $project)`: `$this->authorize('view', $project)`, muat `$project->load(['tasks' => fn ($q) => $q->whereNull('parent_id')->with('subtasks')->orderBy('sort_order')])`, kembalikan `Inertia::render('projects/show', [...])`.
+    - `update(UpdateProjectRequest $request, Project $project)`: `$project->update($request->validated())`, redirect dengan flash toast.
+    - `destroy(Request $request, Project $project)`: `$this->authorize('delete', $project)`, `$project->delete()` (soft delete), redirect ke `projects.index`.
+2. **`app/Http/Controllers/TaskController.php`:**
+    - `index(Request $request)`: ambil tugas milik `$request->user()->id` (`whereNull('parent_id')->with(['project:id,name,status', 'subtasks'])`), dukung filter query `status`, `priority`, `project_id`, dan `due_date`, kembalikan `Inertia::render('tasks/index', [...])`.
+    - `store(StoreTaskRequest $request)`: `$request->user()->tasks()->create($request->normalizedValidated())`, redirect back dengan flash toast.
+    - `update(UpdateTaskRequest $request, Task $task)`: `$task->update($request->normalizedValidated())`, redirect back dengan flash toast.
+    - `destroy(Request $request, Task $task)`: `$this->authorize('delete', $task)`, `$task->delete()`, redirect back.
+3. **Routes di `routes/web.php`:**
+    - Di dalam grup `Route::middleware(['auth', 'verified'])->group(...)`:
+        ```php
+        Route::resource('projects', ProjectController::class)->except(['create', 'edit']);
+        Route::resource('tasks', TaskController::class)->except(['create', 'edit', 'show']);
+        ```
+    - Jalankan `php artisan wayfinder:generate` agar route helper TypeScript ter-generate di `resources/js/routes/` dan `resources/js/actions/`.
 
-1. **Isolasi Layanan Eksternal (`Http::fake()`):**
-    - Jangan pernah memanggil API Gemini, Groq, OpenRouter, atau WhatsApp Gateway sungguhan di dalam automated test.
-    - Gunakan `Http::fake()` untuk menguji:
-        - Sukses di Gemini (provider utama).
-        - Gemini HTTP `429` / timeout -> otomatis fallback ke Groq (`F8`).
-        - Gemini & Groq gagal -> fallback ke OpenRouter (`:free`).
-        - Ketiga provider gagal -> fallback ke templat tetap tanpa AI (`100%` pengingat tetap terkirim).
-2. **Pengujian Waktu & Jam Tenang (`CarbonImmutable::setTestNow()`):**
-    - Uji pengiriman pengingat di luar jam tenang vs di dalam jam tenang (`F5`), serta pergeseran waktu sekitar tengah malam (`23:30 WIB` – `00:30 WIB`).
-3. **Pengujian Webhook (`F4`, `F9`):**
-    - Uji request dengan token salah (`401`/`403`), nomor pengirim asing (`403`), balasan `"selesai"`, balasan `"tunda"` (+30 menit), dan balasan teks bebas.
+#### 2.2 Frontend yang Harus Dibuat/Diubah di Phase 2
+1. **Types (`resources/js/types/models.ts`):** Buat tipe TypeScript `Project`, `Task`, `ProjectStatus`, `TaskStatus`, `TaskPriority` lalu ekspor dari `resources/js/types/index.ts`.
+2. **Sidebar (`resources/js/components/app-sidebar.tsx`):** Tambahkan menu navigasi ke `Dashboard`, `Tasks`, `Projects` (dan siapkan slot `Calendar` & `AI Planner`).
+3. **Halaman `resources/js/pages/tasks/index.tsx`:**
+    - Daftar tugas dengan filter `status`, `priority`, dan `project_id`.
+    - Dialog/Form tambah & edit tugas (`title`, `description`, `status`, `priority`, `project_id`, `parent_id` opsional, `due_at` dalam waktu lokal pengguna).
+    - Checkbox/dropdown cepat untuk mengubah status tugas (`todo`, `in_progress`, `completed`, `cancelled`).
+    - Empty state ketika belum ada tugas.
+4. **Halaman `resources/js/pages/projects/index.tsx` & `resources/js/pages/projects/show.tsx`:**
+    - Kartu proyek dengan progress bar (`progress` 0–100%), status badge, `start_date`–`due_date`, dan form buat/edit proyek.
+    - Halaman detail proyek (`projects/show.tsx`) yang menampilkan daftar tugas dalam proyek tersebut beserta tombol tambah tugas langsung ke proyek.
+5. **Perluasan `resources/js/pages/settings/profile.tsx`:**
+    - Tambahkan input `timezone` (select dari prop `timezones`), `whatsapp_number`, checkbox `whatsapp_enabled`, `reminder_quiet_start`, dan `reminder_quiet_end` (default `00:00`–`05:00`), serta indikator status verifikasi WhatsApp (`whatsapp_verified_at`).
+
+#### 2.3 Test Wajib Phase 2 (`tests/Feature/TaskAndProjectCrudTest.php`)
+- User dapat melihat halaman `/tasks` dan `/projects`, membuat, mengubah, memfilter, dan mengarsipkan/menghapus task & project miliknya.
+- User mendapatkan `403 Forbidden` jika mencoba melihat/mengubah/menghapus task atau project milik user lain.
 
 ---
 
-## 5. Documentation Maintenance (`REQUIREMENT`)
+### PHASE 3 — Calendar & Agenda Berulang (`D-08`, `D-10`)
 
-Setiap perubahan pada skema database, aturan bisnis, alur pengingat, integrasi provider AI/WhatsApp, atau struktur halaman frontend wajib diikuti pembaruan dokumen terkait di `docs/`, `README.md`, `AGENTS.md`, dan `CLAUDE.md` agar dokumentasi tetap menjadi **Single Source of Truth**.
+#### 3.1 Backend yang Harus Dibuat di Phase 3
+1. **Migration:** `database/migrations/2026_11_15_000004_create_calendar_events_table.php` sesuai spesifikasi di [docs/DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) Section 3.1.
+2. **Model & Factory & Policy:**
+    - `app/Models/CalendarEvent.php` (dengan `SoftDeletes`, validasi konsistensi `is_all_day` vs `starts_at`/`ends_at` vs `start_date`/`end_date`, serta validasi kepemilikan `project_id` & `task_id`).
+    - `database/factories/CalendarEventFactory.php`.
+    - `app/Policies/CalendarEventPolicy.php`.
+3. **Service Recurrence & Conflict (`app/Services/Calendar/`):**
+    - `RecurrenceExpanderService.php`: mengekspansi agenda yang memiliki `recurrence_rule` (`FREQ=DAILY`, `FREQ=WEEKLY`, `FREQ=MONTHLY`) ke dalam rentang tanggal tampilan (`rangeStart` s.d. `rangeEnd` dalam `users.timezone`), menerapkan `recurrence_exceptions` dan `parent_event_id` overrides secara idempotent (`D-08`).
+    - `ScheduleConflictDetector.php`: memeriksa apakah sebuah agenda berjam beririsan dengan agenda lain pada rentang waktu yang sama dan mengembalikan array warning (tanpa memblokir penyimpanan).
+4. **Form Requests & Controller:**
+    - `StoreCalendarEventRequest.php` & `UpdateCalendarEventRequest.php` (mendukung parameter `edit_scope`: `'single'` atau `'series'` untuk agenda berulang `D-08`).
+    - `CalendarEventController.php`: menampilkan agenda + deadline `tasks` dalam rentang tanggal tampilan (`day`, `week`, `month` berdasarkan `$user->timezone`).
+
+#### 3.2 Frontend yang Harus Dibuat di Phase 3
+- `resources/js/pages/calendar/index.tsx`: tampilan kalender Harian, Mingguan, dan Bulanan; menampilkan agenda berjam, agenda *all-day*, agenda berulang, dan badge deadline tugas (`tasks.due_at`); modal buat/edit agenda (termasuk pilihan pengulangan dan opsi edit 1 kejadian vs seluruh rangkaian); banner peringatan jika ada jadwal bentrok.
+
+#### 3.3 Test Wajib Phase 3 (`tests/Feature/CalendarEventTest.php`)
+- Konversi waktu UTC <-> `users.timezone` untuk agenda berjam dan *all-day* (termasuk di sekitar pergantian hari `00:00` lokal).
+- Ekspansi agenda berulang (`D-08`), pengubahan satu kejadian (*single occurrence*), pengecualian tanggal, dan pembatalan kejadian.
+- Peringatan konflik jadwal dikembalikan dengan benar tanpa menggagalkan penyimpanan.
 
 ---
 
-## 6. TODO
+### PHASE 4 — Dashboard Aggregation
 
-- [ ] Menetapkan konvensi commit/branching (mis. Conventional Commits) dan aturan branch protection untuk `main`.
+#### 4.1 Backend yang Harus Dibuat di Phase 4
+1. **`app/Services/DashboardAggregatorService.php`:**
+    - Menghitung seluruh data dashboard secara efisien (tanpa N+1 query) berdasarkan `$user->timezone`:
+        1. `greeting` & `local_date`
+        2. `today_tasks` (tugas aktif yang jatuh tempo hari ini atau sedang dikerjakan)
+        3. `upcoming_tasks` (tugas aktif dengan deadline terdekat / overdue)
+        4. `today_events` (agenda kalender hari ini termasuk ekspansi recurrence)
+        5. `active_projects` (`ProjectStatus::Active` dengan `withProgressCounts()`)
+        6. `ai_priorities` (hasil `ai_planner_runs` terbaru yang `success` untuk `planning_date` hari ini, jika ada)
+        7. `whatsapp_status` (`enabled`, `verified`, `number_masked`, `quiet_hours`)
+        8. `completed_summary` (jumlah tugas selesai hari ini & 7 hari terakhir)
+2. **`app/Http/Controllers/DashboardController.php` (`__invoke`):**
+    - Menggantikan `Route::inertia('dashboard', 'dashboard')` di `routes/web.php`.
+3. **Frontend (`resources/js/pages/dashboard.tsx`):**
+    - Menggantikan `PlaceholderPattern` dengan 8 kartu/komponen ringkasan yang responsif, lengkap dengan empty state, aksi cepat centang tugas selesai, dan navigasi ke modul terkait.
+
+---
+
+### PHASE 5 — WhatsApp Reminder (`D-02`, `D-05`, `D-06`, `D-07`, `D-14`)
+
+#### 5.1 Backend yang Harus Dibuat di Phase 5
+1. **Migration & Model:**
+    - `database/migrations/2026_11_15_000005_create_reminders_table.php` sesuai [docs/DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) Section 3.2.
+    - `app/Enums/ReminderStatus.php` (`Pending`, `Processing`, `Sent`, `Failed`, `Cancelled`).
+    - `app/Models/Reminder.php` & `database/factories/ReminderFactory.php`.
+2. **Gateway Contract & Adapter (`app/Contracts/WhatsAppGatewayInterface.php` & `app/Services/WhatsApp/`):**
+    - Method: `sendMessage(string $phoneNumber, string $message, string $idempotencyKey): WhatsAppSendResult`.
+    - Method: `sendVerificationOtp(string $phoneNumber, string $otpCode): WhatsAppSendResult` (`D-14`).
+    - Buat `HttpWhatsAppGateway.php` (konfigurasi via `config/services.php` -> `services.whatsapp.*`) dan `NullWhatsAppGateway.php` (untuk lokal/testing).
+3. **Quiet Hours & Reminder Scheduler Service (`app/Services/Reminder/`):**
+    - `QuietHoursAdjuster.php`: mengevaluasi apakah `$scheduledAtUtc` jatuh pada rentang `reminder_quiet_start`–`reminder_quiet_end` (default `00:00–05:00` di `$user->timezone`). Jika ya, geser ke akhir jam tenang (`05:00` waktu lokal → UTC).
+    - `ReminderSynchronizer.php`: otomatis membuat/memperbarui reminder (`before_24h`, `before_1h` sesuai `D-05`) ketika `Task` atau `CalendarEvent` dibuat/diubah, serta membatalkan (`cancelled`) reminder `pending` ketika task selesai/dibatalkan/dihapus.
+4. **Queue Job & Scheduler:**
+    - `app/Jobs/SendWhatsAppMessageJob.php` (`$tries = 3`, `$backoff = [15, 60, 180]`), memeriksa ulang status `processing`, idempotency, dan `$user->canReceiveWhatsAppReminders()`.
+    - Command `reminders:dispatch-due` yang didaftarkan `Schedule::command('reminders:dispatch-due')->everyMinute()` di `routes/console.php`.
+5. **Verifikasi Nomor WhatsApp (`D-14`):**
+    - Endpoint `POST /settings/whatsapp/send-otp` (menyimpan hash OTP di cache dengan TTL 5 menit, jangan pernah simpan OTP mentah di DB sesuai `D-15`) dan `POST /settings/whatsapp/verify-otp` (mengisi `whatsapp_verified_at = now()`).
+
+---
+
+### PHASE 6 — AI Planner (`D-03`, `D-04`, `D-07`, `D-12`, `D-13`, `D-15`)
+
+#### 6.1 Backend yang Harus Dibuat di Phase 6
+1. **Migration & Model:**
+    - `database/migrations/2026_11_15_000006_create_ai_planner_runs_table.php` sesuai [docs/DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) Section 3.3.
+    - `app/Enums/AiPlannerRunStatus.php` (`Pending`, `Success`, `Failed`).
+    - `app/Models/AiPlannerRun.php` & `database/factories/AiPlannerRunFactory.php`.
+2. **Provider Contract & Adapters (`app/Contracts/AiPlannerProviderInterface.php` & `app/Services/AiPlanner/`):**
+    - `GeminiPlannerProvider.php` (Prioritas 1 — `config('services.gemini.model')`)
+    - `GrokPlannerProvider.php` (Prioritas 2 — `config('services.grok.model')`)
+    - `OpenRouterPlannerProvider.php` (Prioritas 3 — `config('services.openrouter.model')`)
+    - `FallbackPlannerProvider.php` (Prioritas 4 — algoritma deterministik berbasis skor prioritas + kedekatan deadline + slot waktu kosong kalender).
+3. **Validator, Circuit Breaker & Orchestrator (`AiPlannerService.php`):**
+    - Membentuk `input_snapshot` yang telah disanitasi (hanya task aktif, agenda hari itu, dan slot waktu kosong; **tanpa** nomor WA/email/token sesuai `D-15`).
+    - Menggunakan cache circuit breaker per provider (mis. jika provider gagal 3x berturut-turut dalam 5 menit, lewati provider tersebut selama 5 menit sesuai `D-13`).
+    - Memvalidasi output JSON (maks. 3 `priorities`, setiap `task_id` wajib ada di daftar task input).
+    - Menyimpan hasil ke `ai_planner_runs`.
+4. **Otomatisasi & UI (`D-12`):**
+    - Jadwalkan generasi otomatis harian di `routes/console.php` dan pemicu asinkron saat task/agenda hari berjalan berubah signifikan.
+    - Buat `AiPlannerController.php` dan halaman `resources/js/pages/ai-planner/index.tsx` (menampilkan 3 prioritas, alasan, estimasi menit, rekomendasi pengingat yang dapat disetujui pengguna dengan 1 klik, serta peringatan konflik jadwal).
+
+---
+
+### PHASE 7 — Hardening, Retensi Data (`D-11`, `D-15`) & Regression
+
+1. **Command Retensi & Pembersihan Terjadwal (`app/Console/Commands/PruneRetentionDataCommand.php`):**
+    - Menghapus permanen (`forceDelete`) data soft-deleted (`projects`, `tasks`, `calendar_events`) yang sudah melewati masa retensi (mis. > 30 hari, sesuai `D-11`).
+    - Membersihkan log `ai_planner_runs` dan `reminders` lama yang sudah selesai/gagal (mis. > 30 hari, sesuai `D-15`).
+2. **Rate Limiting & Ekspor Data:**
+    - Tambahkan rate limiter pada endpoint pemicu AI Planner dan pengiriman OTP WhatsApp.
+    - Tambahkan endpoint ekspor data JSON pengguna di Settings (sesuai Section 13 Rule 14).
+3. **Verifikasi Akhir Menyeluruh:**
+    - Jalankan `php artisan test`, `php vendor/bin/phpstan analyse --memory-limit=512M`, `php vendor/bin/pint --dirty --format agent`, `npx.cmd tsc --noEmit`, dan `npm run build`.

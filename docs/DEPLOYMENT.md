@@ -1,69 +1,30 @@
-# Deployment Guide — Managjeh (Asisten AI Mahasiswa)
+# Deployment Guide — Managjeh (Personal OS Mahasiswa — MVP 1)
 
-Dokumen ini mencakup **Persyaratan & Konfigurasi Deployment Aktual (`FACT`)** serta **Kebutuhan Infrastruktur Target Asisten AI Mahasiswa (`REQUIREMENT` / `PLANNED`)**, termasuk evaluasi kritis terhadap keterbatasan layanan hosting gratis (target biaya **Rp0**).
-
----
-
-## 1. Komponen Infrastruktur yang Diperlukan (`FACT` & `REQUIREMENT`)
-
-Agar seluruh fitur Asisten AI Mahasiswa (`F1`–`F11`) berfungsi sesuai target ketepatan waktu (pengingat terkirim ≤ 2 menit), lingkungan produksi membutuhkan **5 komponen aktif**:
-
-| Komponen                     | Peran Utama                                                                                               | Status di Repo (`FACT`)                                           | Kebutuhan Produksi (`REQUIREMENT`)                                                     |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| **1. Laravel Web Server**    | Melayani UI React Inertia & menerima HTTP POST Webhook WhatsApp                                           | `Implemented` (`public/index.php`)                                | Harus memiliki URL publik **HTTPS** yang selalu aktif (tidak tidur saat webhook masuk) |
-| **2. PostgreSQL Database**   | Menyimpan akun, tugas, jadwal, pengingat, kebiasaan, chat, `ai_usage`, dan tabel `jobs`                   | `Implemented` (`pgsql`)                                           | Semua timestamp disimpan dalam **UTC** (`config('app.timezone') === 'UTC'`)            |
-| **3. Laravel Scheduler**     | Memeriksa tabel `reminders` (`status = 'pending'`) setiap 1 menit, rencana pagi, & ringkasan Minggu malam | `Not Implemented` (`routes/console.php` masih kosong dari jadwal) | Cron job sistem `* * * * * php artisan schedule:run` wajib berjalan setiap menit       |
-| **4. Laravel Queue Worker**  | Memproses pengiriman pesan ke gateway WhatsApp & pemanggilan `AiService` secara asinkron                  | `Partially Implemented` (tabel `jobs` & `failed_jobs` sudah ada)  | Proses daemon `php artisan queue:work` (atau pemicu ekuivalen setiap menit)            |
-| **5. Outbound HTTPS Access** | Menghubungi API Gemini, Groq, OpenRouter, WhatsApp Gateway, dan SMTP Email                                | `Implemented` (SMTP Gmail teruji di lokal)                        | Akses keluar port `443` (HTTPS) dan `587`/`465` (SMTP) tidak diblokir firewall         |
+Dokumen ini mendokumentasikan kebutuhan infrastruktur, konfigurasi environment, serta langkah deployment untuk **Managjeh MVP 1**.
 
 ---
 
-## 2. Evaluasi Opsi Hosting Gratis & Keterbatasannya (`REQUIREMENT` Rp0 vs Realita Teknis)
+## 1. Komponen Runtime yang Dibutuhkan
 
-> **Peringatan Penting:** Jangan mengasumsikan bahwa platform hosting gratis selalu mendukung **Laravel Scheduler tiap menit** dan **Queue Worker yang berjalan terus-menerus (daemon)** secara cuma-cuma.
-
-Berikut adalah evaluasi opsi infrastruktur dengan target biaya **Rp0**:
-
-| Opsi Hosting Gratis                                                                                                | Kelebihan                                                                                                                          | Keterbatasan Kritis (Wajib Diantisipasi)                                                                                                                                                                                                                                       | Kelayakan untuk Managjeh                                                                                                    |
-| ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| **A. Free Container PaaS (Render Free, Koyeb Free, Fly.io Trial, dll.)**                                           | Mudah di-deploy dari Git, gratis HTTPS otomatis.                                                                                   | 1. **Scale-to-zero / Sleep:** Container mati setelah 5–15 menit tanpa trafik, sehingga cron Scheduler berhenti dan webhook WhatsApp pertama mengalami _cold start_ (bisa timeout).<br>2. Biasanya tidak mengizinkan 2 proses terpisah (web + background worker) secara gratis. | **Kurang Ideal** untuk pengingat ≤ 2 menit kecuali dikombinasikan dengan pemicu cron eksternal dan satu container gabungan. |
-| **B. Serverless PHP / Shared Hosting Gratis**                                                                      | Biaya Rp0 untuk trafik web ringan.                                                                                                 | Tidak mengizinkan daemon `php artisan queue:work` berjalan terus-menerus di latar belakang; batas waktu eksekusi HTTP pendek.                                                                                                                                                  | **Terbatas** — hanya bisa jalan jika cron 1 menit menjalankan `schedule:run` diikuti `queue:work --stop-when-empty`.        |
-| **C. VPS Gratis Selamanya (mis. Oracle Cloud Always Free ARM/AMD) atau Home Server / Mini PC + Cloudflare Tunnel** | Mendukung `systemd` penuh untuk `queue:work`, `cron` sistem tiap menit tanpa tidur, dan PostgreSQL lokal tanpa batas _cold start_. | Kuota pendaftaran Oracle Free Tier terkadang sulit didapat; jika memakai laptop/server rumah, perangkat harus menyala saat jam aktif.                                                                                                                                          | **Paling Direkomendasikan (`RECOMMENDATION`)** untuk menjamin SLA pengingat ≤ 2 menit dengan biaya Rp0.                     |
-| **D. Managed PostgreSQL Gratis (Neon / Supabase Free Tier)**                                                       | PostgreSQL terkelola gratis tanpa mengurus server DB sendiri.                                                                      | Memiliki batas ukuran storage (mis. 500 MB) dan _compute auto-suspend_ (butuh 1–3 detik _wake-up_ saat koneksi pertama).                                                                                                                                                       | **Layak** untuk beban satu pengguna (_single-user_).                                                                        |
-
-### Strategi Arsitektur Worker pada Hosting Terbatas (`RECOMMENDATION`)
-
-Jika nantinya menggunakan hosting yang **tidak** mendukung daemon supervisor `queue:work` 24/7:
-
-- Jalankan proses pengingat dan antrean langsung dari cron setiap menit:
-    ```bash
-    * * * * * cd /path-to-app && php artisan schedule:run >> /dev/null 2>&1
-    ```
-- Di dalam `routes/console.php`, setelah command pemeriksaan pengingat mendispatch job, jalankan `queue:work --stop-when-empty --max-time=50` agar tidak ada proses menggantung melewati batas 1 menit.
+| Komponen | Peran | Kebutuhan Produksi |
+| :--- | :--- | :--- |
+| **1. Web Server (PHP `^8.3` + Nginx/FrankenPHP/Caddy)** | Melayani aplikasi Laravel 13 + Inertia SSR/SPA | Wajib **HTTPS** (syarat mutlak untuk WebAuthn Passkeys dan keamanan sesi) |
+| **2. PostgreSQL (`>= 16`)** | Database utama (`DB_CONNECTION=pgsql`) | Timezone database & aplikasi menggunakan **UTC** |
+| **3. Laravel Queue Worker** | Menjalankan `SendWhatsAppMessageJob` & job AI Planner secara asynchronous | `php artisan queue:work database --tries=3 --backoff=15,60,180 --timeout=30` |
+| **4. Laravel Scheduler** | Memeriksa reminder jatuh tempo tiap menit, menjalankan AI Planner otomatis (`D-12`), & membersihkan retensi data (`D-11`, `D-15`) | Cron `* * * * * php artisan schedule:run` |
 
 ---
 
-## 3. Persyaratan Server & Runtime (`FACT`)
+## 2. Variabel Environment Produksi (`.env`)
 
-- **PHP:** `^8.3` (diuji pada `8.5.12`) dengan ekstensi `pdo_pgsql`, `pgsql`, `mbstring`, `openssl`, `intl`, `bcmath`, `curl`, `xml`, `zip`.
-- **Node.js & npm:** Digunakan pada tahap build aset frontend (`vp build`).
-- **Database:** PostgreSQL (diuji pada `18.6`).
-- **HTTPS Wajib (`REQUIREMENT`):**
-    1. Gateway WhatsApp membutuhkan endpoint webhook publik berprotokol **HTTPS** (`https://domain-anda.com/...`).
-    2. Browser mewajibkan **HTTPS** (selain `localhost`) agar fitur **Passkeys / WebAuthn** berfungsi (`APP_URL` wajib menggunakan `https://`).
-
----
-
-## 4. Konfigurasi Environment Produksi (`.env`)
-
-### 4.1 Variabel yang Sudah Digunakan Saat Ini (`FACT`)
+Jangan pernah menyimpan kredensial asli di repository. Gunakan variabel berikut pada server produksi:
 
 ```dotenv
 APP_NAME="Managjeh"
 APP_ENV=production
 APP_KEY=base64:...
 APP_DEBUG=false
-APP_URL=https://domain-anda.com
+APP_URL=https://managjeh.example.com
 
 DB_CONNECTION=pgsql
 DB_HOST=127.0.0.1
@@ -77,85 +38,46 @@ SESSION_SECURE_COOKIE=true
 QUEUE_CONNECTION=database
 CACHE_STORE=database
 
-MAIL_MAILER=smtp
-MAIL_SCHEME=smtp
-MAIL_HOST=smtp.gmail.com
-MAIL_PORT=587
-MAIL_USERNAME=
-MAIL_PASSWORD=
-MAIL_FROM_ADDRESS=
-MAIL_FROM_NAME="${APP_NAME}"
-```
-
-### 4.2 Variabel Tambahan untuk Fitur Target (`PLANNED` — Minggu 2 & 4)
-
-```dotenv
-# WhatsApp Gateway & Webhook
-WHATSAPP_API_URL=
+# WhatsApp Gateway Adapter (D-02, D-14)
+WHATSAPP_DRIVER=http
+WHATSAPP_BASE_URL=
 WHATSAPP_API_TOKEN=
 WHATSAPP_WEBHOOK_SECRET=
 
-# AI Service (Gemini -> Groq -> OpenRouter :free)
+# AI Planner Providers: Gemini -> Grok -> OpenRouter (D-03, D-04)
 GEMINI_API_KEY=
-GROQ_API_KEY=
+GEMINI_MODEL=gemini-2.5-flash
+GEMINI_TIMEOUT=15
+
+GROK_API_KEY=
+GROK_BASE_URL=https://api.x.ai/v1
+GROK_MODEL=grok-3-mini
+GROK_TIMEOUT=15
+
 OPENROUTER_API_KEY=
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_MODEL=google/gemini-2.0-flash-exp:free
+OPENROUTER_TIMEOUT=15
 ```
 
 ---
 
-## 5. Langkah Build, Queue Worker & Scheduler
-
-### 5.1 Build & Optimasi Aplikasi (`FACT`)
+## 3. Langkah Deployment & Provisioning Pengguna Pertama (`D-01`)
 
 ```bash
+# 1. Install dependencies & build frontend
 composer install --no-dev --optimize-autoloader
 npm ci
 npm run build
+
+# 2. Jalankan migrasi database
 php artisan migrate --force
+
+# 3. Buat akun pengguna melalui CLI Provisioning (karena registrasi publik dinonaktifkan sesuai D-01)
+php artisan user:provision --name="Nama Mahasiswa" --email="mahasiswa@example.com" --password="PasswordKuat#2026!" --timezone="Asia/Jakarta"
+
+# 4. Optimasi cache Laravel
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 ```
-
-### 5.2 Menjalankan Laravel Scheduler (`REQUIREMENT` — Minggu 2)
-
-Tambahkan entri cron sistem pada server:
-
-```cron
-* * * * * cd /path/to/managjeh && php artisan schedule:run >> /dev/null 2>&1
-```
-
-### 5.3 Menjalankan Queue Worker (`REQUIREMENT` — Minggu 2)
-
-Gunakan Supervisor / `systemd` untuk menjaga worker tetap hidup:
-
-```bash
-php artisan queue:work database --tries=3 --backoff=15,60,180 --timeout=30
-```
-
----
-
-## 6. Backup Database & Monitoring Pengiriman Pesan (`REQUIREMENT` & `RECOMMENDATION`)
-
-### 6.1 Backup PostgreSQL Berkala
-
-Karena seluruh tugas kuliah, jadwal, dan riwayat percakapan pengguna tunggal tersimpan di PostgreSQL:
-
-- Jadwalkan backup harian menggunakan `pg_dump`:
-    ```bash
-    pg_dump -Fc -h "$DB_HOST" -U "$DB_USERNAME" -d "$DB_DATABASE" > backup_managjeh_$(date +%F).dump
-    ```
-- Simpan salinan dump di penyimpanan terpisah dan uji proses _restore_ secara berkala.
-
-### 6.2 Monitoring Queue, Kuota AI & Pengiriman Gagal
-
-1. **Indikator di Beranda `"Hari ini"` (`REQUIREMENT`):** Pengingat di tabel `reminders` yang berstatus `failed` setelah seluruh percobaan ulang habis wajib ditampilkan secara mencolok di Beranda `"Hari ini"` agar pengguna mengetahui ada pesan WhatsApp yang gagal terkirim.
-2. **Pemantauan `failed_jobs`:** Periksa antrean gagal dengan `php artisan queue:failed` dan kirim ulang dengan `php artisan queue:retry all` setelah gangguan gateway teratasi.
-3. **Pemantauan Kuota AI (`ai_usage`):** Pantau tabel `ai_usage` untuk melihat distribusi pemakaian harian antara Gemini, Groq, dan OpenRouter.
-4. **Health Check (`FACT`):** Endpoint `GET /up` sudah tersedia untuk memantau ketersediaan HTTP server.
-
----
-
-## 7. TODO (`UNKNOWN`)
-
-- [ ] Memutuskan platform hosting gratis final yang akan digunakan (`UNKNOWN` di PRD).

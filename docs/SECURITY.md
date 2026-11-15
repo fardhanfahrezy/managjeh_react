@@ -1,112 +1,41 @@
-# Security Documentation — Managjeh (Asisten AI Mahasiswa)
+# Security & Privacy Documentation — Managjeh (Personal OS Mahasiswa — MVP 1)
 
-Dokumen ini mendokumentasikan:
-
-1. **Mekanisme Keamanan Aktual yang Sudah Diterapkan (`FACT` — Implemented)** di repository.
-2. **Kebutuhan Keamanan Target Asisten AI Mahasiswa (`REQUIREMENT` / `PLANNED` — Not Implemented)** berdasarkan Blueprint & PRD.
-3. **Evaluasi Risiko & Rekomendasi Penguatan Keamanan (`RECOMMENDATION`)**.
+Dokumen ini mendokumentasikan mekanisme keamanan dan privasi yang telah diterapkan (`FACT` — Phase 0 & Phase 1) serta kewajiban keamanan untuk Phase 2 s.d. Phase 7 (`REQUIREMENT` — terikat keputusan `D-01` s.d. `D-15`).
 
 ---
 
-## 1. Keamanan yang Sudah Diterapkan di Repository (`FACT` — Implemented)
+## 1. Keamanan yang Sudah Diterapkan (`FACT` — Phase 0 & Phase 1)
 
-### 1.1 Backend Security (`FACT`)
-
-- **Authentication & Session Guard (`config/auth.php`, `config/session.php`):**
-    - Menggunakan session guard `web` dengan penyimpanan sesi di PostgreSQL (`SESSION_DRIVER=database`), `http_only => true`, dan `same_site => 'lax'`.
-- **Multi-Factor & Passwordless Authentication (`config/fortify.php`):**
-    - **TOTP 2FA:** `Features::twoFactorAuthentication(['confirm' => true, 'confirmPassword' => true])`.
-    - **Passkeys / WebAuthn:** `Features::passkeys(['confirmPassword' => true])` terikat ke `APP_URL` (`relying_party_id` & `allowed_origins`).
-- **Password Security (`User.php`, `AppServiceProvider.php`):**
-    - Hashing `bcrypt` (`hashed` cast, `BCRYPT_ROUNDS=12`).
-    - Pada `APP_ENV=production`, `Password::defaults()` mewajibkan minimal 12 karakter, huruf besar/kecil, angka, simbol, dan lolos pemeriksaan kebocoran `uncompromised()`.
-    - Perubahan password dan penghapusan akun mewajibkan verifikasi `current_password`.
-- **CSRF, Cookie Encryption & Rate Limiting (`bootstrap/app.php`, `FortifyServiceProvider.php`):**
-    - Proteksi CSRF aktif pada seluruh route `web`.
-    - Cookie dienkripsi kecuali `appearance` dan `sidebar_state`.
-    - Rate limiter aktif untuk `login` (5/menit), `two-factor` (5/menit), `passkeys` (10/menit), serta `throttle:6,1` pada update password dan verifikasi email.
-- **Database & Cache Hardening:**
-    - `DB::prohibitDestructiveCommands(app()->isProduction())` memblokir perintah destruktif di produksi.
-    - `config/cache.php` mengatur `'serializable_classes' => false`.
-    - File `.env` terdaftar di `.gitignore`.
-
-### 1.2 Frontend Security (`FACT`)
-
-- Auto-escaping JSX React mencegah XSS pada rendering teks dinamis.
-- Tidak ada token rahasia atau kredensial yang disimpan di `localStorage` (hanya preferensi tema `appearance`).
+1. **Penonaktifan Registrasi Publik (`D-01`):**
+    - `Features::registration()` telah dihapus dari [config/fortify.php](../config/fortify.php).
+    - Pembuatan akun hanya dapat dilakukan melalui CLI `php artisan user:provision` ([ProvisionUserCommand.php](../app/Console/Commands/ProvisionUserCommand.php)).
+2. **Autentikasi Berlapis (Fortify `1.42.0`):**
+    - Session guard berbasis PostgreSQL (`http_only => true`, `same_site => 'lax'`), TOTP 2FA, dan WebAuthn Passkeys.
+    - Rate limiting aktif pada login (`5/menit`), 2FA (`5/menit`), passkeys (`10/menit`), dan update password (`6/menit`).
+3. **Isolasi Kepemilikan Data (`user_id` Authorization):**
+    - [ProjectPolicy.php](../app/Policies/ProjectPolicy.php) dan [TaskPolicy.php](../app/Policies/TaskPolicy.php) memverifikasi `$user->id === $resource->user_id`.
+    - [StoreTaskRequest.php](../app/Http/Requests/Tasks/StoreTaskRequest.php), [UpdateTaskRequest.php](../app/Http/Requests/Tasks/UpdateTaskRequest.php), dan `Task::booted()` menolak keras pengaitan `project_id` atau `parent_id` lintas pengguna.
+4. **Proteksi Mass Assignment:**
+    - Seluruh model (`User`, `Project`, `Task`) menggunakan atribut `#[Fillable([...])]` eksplisit. `user_id` pada request tidak pernah diambil dari input form pengguna.
+5. **Verifikasi Nomor WhatsApp (`D-14`):**
+    - Perubahan `whatsapp_number` pada [ProfileController.php](../app/Http/Controllers/Settings/ProfileController.php) otomatis mereset `whatsapp_verified_at = null`.
+    - Method `$user->canReceiveWhatsAppReminders()` menjamin pesan tidak dikirim sebelum nomor diverifikasi dan `whatsapp_enabled === true`.
 
 ---
 
-## 2. Kebutuhan Keamanan Target Asisten AI Mahasiswa (`REQUIREMENT` / `PLANNED` — Not Implemented)
+## 2. Kewajiban Keamanan & Privasi untuk Phase 2 s.d. Phase 7 (`REQUIREMENT`)
 
-Bagian ini mendokumentasikan kontrol keamanan yang diwajibkan oleh Blueprint & PRD untuk fitur yang akan dibangun pada Minggu 1–6:
-
-### 2.1 Single-User Access Control (`REQUIREMENT`)
-
-- **Prinsip Pengguna Tunggal:** Aplikasi dirancang untuk satu pengguna tunggal (pemilik produk).
-- **Pembatasan Akun & Query:**
-    - Seluruh query tugas (`tasks`), jadwal (`schedules`), pengingat (`reminders`), kebiasaan (`habits`), dan pesan (`messages`) wajib di-scope ke `user_id` pengguna yang sedang login.
-    - **Rekomendasi Implementasi (`RECOMMENDATION`):** Nonaktifkan registrasi publik (`Features::registration()`) setelah akun pemilik dibuat atau batasi pendaftaran melalui konfigurasi environment (`ALLOW_REGISTRATION=false`) agar pihak luar tidak dapat mendaftarkan akun di server produksi.
-
-### 2.2 Keamanan Webhook WhatsApp (`REQUIREMENT` — `F4`, `F9`)
-
-Endpoint webhook WhatsApp dapat diakses dari internet publik sehingga wajib menerapkan pertahanan berlapis:
-
-1. **WhatsApp Webhook Secret (`REQUIREMENT`):**
-    - Setiap request masuk ke endpoint webhook wajib diverifikasi menggunakan token rahasia (`WHATSAPP_WEBHOOK_SECRET`) yang dikirim melalui header atau signature gateway.
-    - Verifikasi wajib menggunakan `hash_equals()` untuk mencegah _timing attack_. Request tanpa token yang sah langsung ditolak (`401 Unauthorized` / `403 Forbidden`).
-2. **Validasi Nomor Pengirim (`REQUIREMENT`):**
-    - Nomor telepon pengirim pada payload webhook wajib dinormalisasi dan dicocokkan dengan `users.nomor_wa` milik pengguna tunggal.
-    - **Pesan dari nomor selain milik pengguna wajib ditolak (`403 Forbidden`)** sebelum memicu perubahan status tugas, penundaan pengingat, ataupun pemanggilan API AI.
-3. **Proteksi Pemrosesan Webhook Duplikat / Replay (`RECOMMENDATION`):**
-    - Simpan identifier pesan unik dari gateway (`external_message_id`) dan tolak pemrosesan ulang apabila ID pesan tersebut sudah pernah diproses sebelumnya.
-
-### 2.3 Manajemen API Key & Kredensial Eksternal (`REQUIREMENT`)
-
-- Seluruh kunci rahasia (`GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `WHATSAPP_API_TOKEN`, `WHATSAPP_WEBHOOK_SECRET`, `MAIL_PASSWORD`) **wajib disimpan di `.env`** dan diakses hanya melalui `config/services.php` (bukan `env()` langsung di luar file konfigurasi agar kompatibel dengan `php artisan config:cache`).
-- Kunci API **dilarang keras** dikirim ke frontend React (Inertia shared props), ditulis ke dalam kode sumber, atau ditampilkan di dokumentasi.
-
-### 2.4 Rate Limiting Tambahan (`RECOMMENDATION`)
-
-Selain rate limiter autentikasi yang sudah ada (`FACT`), tambahkan rate limiter pada:
-
-- **Endpoint Webhook WhatsApp:** Membatasi jumlah request per menit (mis. `throttle:30,1`) untuk mencegah banjir request jika terjadi misconfiguration pada gateway atau serangan brute-force token.
-- **Endpoint AI di Web (`/daily-plan/generate`, `/tasks/{task}/breakdown`, `/chat`):** Membatasi request per menit dari UI disertai pemeriksaan kuota harian di tabel `ai_usage` (`F8`).
-
-### 2.5 Data Minimization & Perlindungan Data Sensitif dari AI (`REQUIREMENT`)
-
-- **Risiko Privasi Free Tier Gemini (`REQUIREMENT`):** Berdasarkan kebijakan free tier Google AI Studio, data prompt yang dikirim dapat digunakan Google untuk meningkatkan produknya.
-- **Aturan Sanitasi Konteks AI:**
-    - **Hanya kirim data yang mutlak diperlukan:** judul tugas, deskripsi tugas akademik/kerja, prioritas, tenggat, dan jadwal kegiatan.
-    - **Dilarang mengirim ke AI:** catatan harian pribadi, catatan mood, nomor WhatsApp (`nomor_wa`), alamat email, password, maupun token sesi.
-- **Hak Pengguna atas Data (`REQUIREMENT`):**
-    - Pengguna memiliki kendali penuh untuk mengekspor seluruh datanya dan menghapus akun beserta datanya dari database.
-
-### 2.6 Kewajiban HTTPS & Keamanan Cookie Produksi (`REQUIREMENT` & `RECOMMENDATION`)
-
-- Seluruh trafik web dan endpoint webhook di produksi **wajib berjalan di atas HTTPS** (`APP_URL=https://...`).
-- HTTPS juga merupakan syarat wajib browser untuk fitur **WebAuthn / Passkeys** di luar `localhost`.
-- Pada environment produksi, set `SESSION_SECURE_COOKIE=true` dan pertimbangkan `SESSION_ENCRYPT=true`.
-
-### 2.7 Secure Logging (`RECOMMENDATION`)
-
-- Saat mencatat kegagalan pemanggilan `AiService` atau `WhatsAppService` ke `storage/logs/laravel.log`, pastikan header `Authorization`, query parameter `key=...` (pada URL Gemini API), isi catatan pribadi, dan kredensial SMTP/API telah disensor (_redacted_).
-
----
-
-## 3. Ringkasan Audit Celah Keamanan Saat Ini (`FACT` vs `REQUIREMENT`)
-
-| Area Keamanan              | Kondisi Aktual (`FACT`)                                         | Target (`REQUIREMENT`)              | Tindakan yang Diperlukan                                               |
-| -------------------------- | --------------------------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------------- |
-| **Registrasi Publik**      | `Features::registration()` aktif untuk umum                     | Sistem _single-user_                | Batasi/nonaktifkan registrasi setelah akun pemilik tersedia            |
-| **Proteksi Webhook WA**    | Belum ada route webhook                                         | Token rahasia + validasi `nomor_wa` | Buat middleware verifikasi `WHATSAPP_WEBHOOK_SECRET` & cek `nomor_wa`  |
-| **Sanitasi Data AI**       | Belum ada `AiService`                                           | Whitelist hanya tugas & jadwal      | Buat context builder yang membuang field sensitif sebelum memanggil AI |
-| **Secure Cookie Produksi** | `SESSION_SECURE_COOKIE` belum diset eksplisit di `.env.example` | Wajib HTTPS di produksi             | Set `SESSION_SECURE_COOKIE=true` saat deployment                       |
-
----
-
-## 4. TODO
-
-- [ ] Menambahkan middleware verifikasi `WHATSAPP_WEBHOOK_SECRET` dan validasi `nomor_wa` pada Minggu 2.
-- [ ] Menambahkan opsi penonaktifan registrasi publik setelah akun pengguna tunggal dibuat.
-- [ ] Memastikan tidak ada URL error log Gemini yang mencetak parameter `?key=` secara mentah di log aplikasi.
+1. **Sanitasi Konteks Prompt AI (`D-15`):**
+    - Hanya kirimkan data minimal yang diperlukan ke provider AI (`Gemini`, `Grok`, `OpenRouter`): `task.id`, `task.title`, `task.priority`, `task.due_at`, `project.name`, dan rentang waktu agenda kalender.
+    - **DILARANG KERAS** mengirimkan `password`, `two_factor_secret`, `remember_token`, `whatsapp_number`, `email`, kode OTP, atau API key ke dalam prompt AI maupun `ai_planner_runs.input_snapshot`.
+2. **Keamanan OTP & Log (`D-14`, `D-15`):**
+    - Kode OTP verifikasi WhatsApp **tidak boleh** disimpan dalam bentuk plain-text di database atau log; simpan hanya hash (`Hash::make($otp)`) di cache dengan TTL pendek (mis. 5 menit) dan batas percobaan verifikasi.
+    - Saat mencatat error dari Gemini/Grok/OpenRouter atau WhatsApp Gateway ke `ai_planner_runs.error_message`, `reminders.failure_reason`, atau `laravel.log`, pastikan header `Authorization` dan query `?key=...` telah disensor.
+3. **Keamanan Webhook Delivery WhatsApp (Phase 5):**
+    - Jika vendor gateway mengirimkan webhook status pengiriman, verifikasi signature/token rahasia menggunakan `hash_equals()`.
+    - Jangan pernah mengeksekusi perintah perubahan data tugas/agenda dari pesan masuk WhatsApp pada MVP 1.
+4. **Rate Limiting & Circuit Breaker AI (`D-13`):**
+    - Terapkan rate limit pada endpoint manual `POST /ai-planner/generate` dan `POST /settings/whatsapp/send-otp`.
+    - Terapkan *circuit breaker* pada `AiPlannerService` agar kegagalan beruntun pada satu provider tidak memicu banjir request keluar.
+5. **Retensi Data & Ekspor/Penghapusan (`D-11`, `D-15`):**
+    - Sediakan command terjadwal di Phase 7 untuk menghapus permanen data soft-deleted dan log `reminders` / `ai_planner_runs` yang melewati batas masa retensi.

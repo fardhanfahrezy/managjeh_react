@@ -1,32 +1,41 @@
 # CLAUDE.md
 
-Instruksi kerja **Managjeh (Asisten AI Mahasiswa)** untuk Claude Code.
+Instruksi kerja **Managjeh — Personal OS Mahasiswa (Technical Specification MVP 1)** untuk AI Coding Agent.
 
-> **Single Source of Truth:** Sebelum memulai tugas apa pun, baca [AGENTS.md](AGENTS.md) dan [docs/PRD.md](docs/PRD.md) secara penuh. Seluruh aturan kerja wajib AI Agent (19 aturan inti, pelacakan ID requirement `F1`–`F11`, prioritas MVP Minggu 1–3, kontrol ruang lingkup, serta `<laravel-boost-guidelines>`) terpusat di [AGENTS.md](AGENTS.md) agar tidak terjadi duplikasi instruksi.
+> **Single Source of Truth:** Sebelum memulai tugas apa pun, baca [AGENTS.md](AGENTS.md), [docs/PRD.md](docs/PRD.md), [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md), dan [docs/DEVELOPMENT_GUIDELINES.md](docs/DEVELOPMENT_GUIDELINES.md). Seluruh aturan arsitektur, keputusan final `D-01` s.d. `D-15`, dan `<laravel-boost-guidelines>` terpusat di [AGENTS.md](AGENTS.md).
 
-## Dokumen Referensi di `docs/`
+## 1. Gambaran Produk & Arsitektur (`FACT` + `REQUIREMENT`)
 
-Baca dokumen yang relevan dengan tugas sebelum mengubah kode:
+- **Produk:** Personal OS untuk mahasiswa (*single-user sekarang, arsitektur siap multi-user* dengan kepemilikan `user_id` di seluruh tabel).
+- **Cakupan MVP 1:**
+    1. **Task Management** (`tasks`: status `todo`/`in_progress`/`completed`/`cancelled`, prioritas `low`/`medium`/`high`/`urgent`, `due_at` UTC, `project_id`, `parent_id` maks. 1 level sesuai `D-09`, soft delete `D-11`).
+    2. **Project Management** (`projects`: status `active`/`completed`/`archived`, `start_date`, `due_date`, kalkulasi progres otomatis dari task non-cancelled, soft delete `D-11`).
+    3. **Calendar & Agenda Berulang** (`calendar_events`: agenda berjam dalam UTC, agenda *all-day* dalam `date` lokal, serta dukungan *recurrence rule*, override satu kejadian, dan exception sesuai `D-08`).
+    4. **Dashboard** (`/dashboard`: greeting & tanggal lokal, ringkasan tugas hari ini, deadline terdekat, agenda hari ini, progres proyek aktif, 3 prioritas AI Planner, status WhatsApp, ringkasan tugas selesai).
+    5. **WhatsApp Reminder** (`reminders`: kanal pengiriman pengingat satu arah melalui `WhatsAppGatewayInterface` `D-02`, verifikasi nomor OTP/gateway wajib `D-14`, multi-reminder per task `D-05` & `D-07`, quiet hours `00:00–05:00` waktu lokal pengguna `D-06`).
+    6. **AI Planner** (`ai_planner_runs`: rekomendasi maksimal 3 prioritas harian dengan urutan fallback `Gemini` → `Grok` → `OpenRouter` → `Rule-based Fallback` sesuai `D-03` & `D-04`, dipicu otomatis via Scheduler/perubahan data relevan maupun manual sesuai `D-12`).
+- **Di Luar Cakupan MVP (DILARANG DIBANGUN):** Keuangan/anggaran, habit tracker, mood/tidur, catatan kuliah, karier, relasi/kontak, jurnal mingguan, Google Calendar eksternal (`D-10`), serta perintah input/ubah data melalui balasan WhatsApp.
 
-- [README.md](README.md) — Overview Asisten AI Mahasiswa, status fitur `F1`–`F11`, setup, dan perintah dev/test/build
-- [docs/PRD.md](docs/PRD.md) — Visi produk, requirement `F1`–`F11`, kriteria penerimaan, roadmap 6 minggu & technical gap analysis
-- [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md) & [docs/FRONTEND_ARCHITECTURE.md](docs/FRONTEND_ARCHITECTURE.md) — Arsitektur aktual (`FACT`) vs target (`REQUIREMENT`) untuk Laravel 13 + Inertia v3 + React 19 + Scheduler/Queue + WhatsApp + `AiService`
-- [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) — Skema PostgreSQL aktual (`users`, `passkeys`, `jobs`, dll.) vs rancangan tabel target (`tasks`, `schedules`, `reminders`, `habits`, `habit_logs`, `messages`, `ai_usage`)
-- [docs/BUSINESS_RULES.md](docs/BUSINESS_RULES.md) & [docs/USER_FLOW.md](docs/USER_FLOW.md) — Aturan bisnis (`F1`–`F11`), jam tenang, snooze 30 menit, fallback AI, privasi data, dan 14 diagram alur pengguna
-- [docs/API_INTEGRATION.md](docs/API_INTEGRATION.md) — Route Inertia aktual serta spesifikasi integrasi WhatsApp Gateway, Webhook, Gemini, Groq, dan OpenRouter (`:free`)
-- [docs/SECURITY.md](docs/SECURITY.md) & [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Keamanan single-user, token webhook, validasi `nomor_wa`, sanitasi prompt AI, serta evaluasi hosting gratis
-- [docs/DEVELOPMENT_GUIDELINES.md](docs/DEVELOPMENT_GUIDELINES.md) — Konvensi kode, struktur direktori, timezone UTC/`Asia/Jakarta`, transaksi, idempotency, dan standar testing
+## 2. Status Implementasi Saat Ini (`FACT`)
 
-## Gambaran Singkat Arsitektur & Status
+- **Phase 0 (Audit) & Phase 1 (Core Data) — `Implemented`:**
+    - Registrasi publik dinonaktifkan (`D-01`), akun dibuat via `php artisan user:provision`.
+    - Tabel `users` (preferensi `timezone`, `whatsapp_number`, `whatsapp_verified_at`, `whatsapp_enabled`, `reminder_quiet_start = '00:00:00'`, `reminder_quiet_end = '05:00:00'`), `projects`, dan `tasks` sudah dimigrasikan.
+    - Model `User`, `Project`, `Task`, Enum `ProjectStatus`, `TaskStatus`, `TaskPriority`, `ProjectPolicy`, `TaskPolicy`, dan FormRequest (`StoreProjectRequest`, `UpdateProjectRequest`, `StoreTaskRequest`, `UpdateTaskRequest`) sudah selesai beserta **57 Pest tests yang lulus** (`0` PHPStan error).
+- **Phase 2 s.d. Phase 7 — `Planned` (Urutan Pengerjaan Berikutnya):**
+    - **Phase 2:** Task & Project UI + Settings Timezone/WhatsApp (`ProjectController`, `TaskController`, halaman React `tasks/*`, `projects/*`, `settings/profile.tsx`).
+    - **Phase 3:** Calendar & Recurrence (`calendar_events` migration, `CalendarEvent` model, `RecurrenceService`, `CalendarEventController`, halaman `calendar/index.tsx`).
+    - **Phase 4:** Dashboard Aggregation (`DashboardController`, `DashboardAggregatorService`, halaman `dashboard.tsx`).
+    - **Phase 5:** WhatsApp Reminder (`reminders` migration, `Reminder` model, `WhatsAppGatewayInterface`, `ReminderSchedulerService`, `SendWhatsAppMessageJob`, Scheduler per menit, OTP verification).
+    - **Phase 6:** AI Planner (`ai_planner_runs` migration, `AiPlannerRun` model, `AiPlannerProviderInterface`, `Gemini`/`Grok`/`OpenRouter`/`Fallback` providers, `AiPlannerService`, halaman `ai-planner/index.tsx`).
+    - **Phase 7:** Hardening (retensi log `D-15`, cleanup soft delete `D-11`, rate limiting, ekspor data, regresi penuh).
 
-- **Monorepo SPA (`Implemented`):** Backend **Laravel 13** (`PHP ^8.3`) berkomunikasi dengan frontend **React 19 + TypeScript + Tailwind CSS v4** melalui **Inertia.js v3** dan **Laravel Wayfinder** (`resources/js/actions/`, `resources/js/routes/`).
-- **Database & Timezone (`Implemented`):** PostgreSQL (`DB_CONNECTION=pgsql`, database `managjeh` & `managjeh_test`). Semua timestamp disimpan dalam **UTC** dan ditampilkan/dievaluasi dalam **`Asia/Jakarta`**.
-- **Fitur Domain `F1`–`F11` (`Planned` / `Not Implemented`):** Modul tugas (`F1`), jadwal (`F2`), pengingat WhatsApp (`F3`), webhook `"selesai"`/`"tunda"` (`F4`), jam tenang (`F5`), beranda `"Hari ini"` (`F6`), perencana harian AI (`F7`), `AiService` fallback Gemini -> Groq -> OpenRouter `:free` -> templat tetap (`F8`), obrolan AI (`F9`), pemecah tugas (`F10`), dan pelacak kebiasaan (`F11`) masih berstatus `Planned`.
+## 3. Dokumen Referensi di `docs/`
 
-## Batasan Utama Project
-
-- **Prioritaskan MVP (`F1`–`F6`)** dan jangan membangun fitur di luar ruang lingkup (_out of scope_: multi-user, mobile native, pembayaran, keuangan, timer fokus, impor jadwal otomatis) tanpa persetujuan.
-- **Jangan mengasumsikan layanan eksternal (WhatsApp Gateway, Gemini, Groq, OpenRouter) sudah terintegrasi** di kode saat ini.
-- **Privasi AI:** Jangan pernah mengirimkan catatan harian sensitif, mood, atau `nomor_wa` ke provider AI.
-- **Kerahasiaan:** Jangan pernah menulis password, secret token, atau API key ke dalam kode maupun dokumentasi.
-- **File Generate:** Jangan mengubah folder hasil generate (`vendor/`, `node_modules/`, `resources/js/{actions,routes,wayfinder}/`, `public/build/`).
+- [docs/PRD.md](docs/PRD.md) — Spesifikasi Teknis MVP 1 & Keputusan Final `D-01`–`D-15`
+- [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) — Skema PostgreSQL aktual (Phase 1) & target (Phase 3, 5, 6)
+- [docs/BUSINESS_RULES.md](docs/BUSINESS_RULES.md) — Aturan bisnis domain & validasi
+- [docs/DEVELOPMENT_GUIDELINES.md](docs/DEVELOPMENT_GUIDELINES.md) — Panduan teknis langkah demi langkah per Phase untuk AI Agent
+- [docs/FRONTEND_ARCHITECTURE.md](docs/FRONTEND_ARCHITECTURE.md) — Spesifikasi komponen React, TypeScript types, dan Inertia props
+- [docs/API_INTEGRATION.md](docs/API_INTEGRATION.md) — Route, kontrak `WhatsAppGatewayInterface`, dan kontrak `AiPlannerProviderInterface`
+- [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md), [docs/USER_FLOW.md](docs/USER_FLOW.md), [docs/SECURITY.md](docs/SECURITY.md), [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
