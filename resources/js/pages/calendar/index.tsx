@@ -30,9 +30,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import AppLayout from '@/layouts/app-layout';
 import { index as calendarIndex } from '@/routes/calendar';
-import type { BreadcrumbItem } from '@/types';
 import type {
     CalendarEvent,
     CalendarView,
@@ -58,13 +56,6 @@ type Props = {
     tasks_for_select: TaskOption[];
     conflict_warnings: ConflictWarning[];
 };
-
-const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Calendar',
-        href: calendarIndex(),
-    },
-];
 
 const WEEKDAY_CODES = [
     { code: 'MO', label: 'Sen' },
@@ -489,7 +480,7 @@ export default function CalendarIndex({
         task_deadlines.filter((task) => task.due_date_local === dayKey);
 
     return (
-        <AppLayout breadcrumbs={breadcrumbs}>
+        <>
             <Head title="Calendar" />
 
             <div className="flex flex-1 flex-col gap-5 p-4 md:p-6">
@@ -1565,6 +1556,6 @@ export default function CalendarIndex({
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-        </AppLayout>
+        </>
     );
 }
