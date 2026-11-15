@@ -35,4 +35,11 @@ return [
         ],
     ],
 
+    'whatsapp' => [
+        'driver' => env('WHATSAPP_DRIVER', 'null'),
+        'endpoint' => env('WHATSAPP_API_ENDPOINT', ''),
+        'api_token' => env('WHATSAPP_API_TOKEN', ''),
+        'timeout' => (int) env('WHATSAPP_TIMEOUT', 10),
+    ],
+
 ];

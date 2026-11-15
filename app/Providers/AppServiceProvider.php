@@ -2,6 +2,9 @@
 
 namespace App\Providers;
 
+use App\Contracts\WhatsAppGatewayInterface;
+use App\Services\WhatsApp\HttpWhatsAppGateway;
+use App\Services\WhatsApp\NullWhatsAppGateway;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -15,7 +18,19 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(WhatsAppGatewayInterface::class, function (): WhatsAppGatewayInterface {
+            $driver = config('services.whatsapp.driver', 'null');
+
+            if ($driver === 'http') {
+                return new HttpWhatsAppGateway(
+                    endpoint: (string) config('services.whatsapp.endpoint', ''),
+                    apiToken: (string) config('services.whatsapp.api_token', ''),
+                    timeoutSeconds: (int) config('services.whatsapp.timeout', 10),
+                );
+            }
+
+            return new NullWhatsAppGateway;
+        });
     }
 
     /**
