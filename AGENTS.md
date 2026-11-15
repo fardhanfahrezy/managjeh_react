@@ -1,12 +1,12 @@
 # Managjeh (Asisten AI Mahasiswa) — Panduan Utama AI Agent
 
-- **Produk:** Asisten pribadi *single-user* untuk mahasiswa berbasis web dan pengingat WhatsApp dengan dukungan AI berbiaya Rp0 (Gemini utama, Groq & OpenRouter `:free` sebagai fallback, serta templat tetap tanpa AI).
+- **Produk:** Asisten pribadi _single-user_ untuk mahasiswa berbasis web dan pengingat WhatsApp dengan dukungan AI berbiaya Rp0 (Gemini utama, Groq & OpenRouter `:free` sebagai fallback, serta templat tetap tanpa AI).
 - **Stack (`FACT`):** Laravel `13.42.0` (PHP `^8.3` / `8.5.12`), Inertia.js v3 (`3.7.0` / `@inertiajs/react` `^3.0.0`), React `19.2.0`, TypeScript `^5.7.2`, Tailwind CSS `v4`, Laravel Fortify `1.42.0` (2FA TOTP & Passkeys/WebAuthn), Laravel Wayfinder `0.1.23`, Vite+ (`vp` `1.4.0`), Pest `5.3.5`, Larastan `3.15.0` (level 7), Pint `1.32.3`.
 - **Database (`FACT`):** PostgreSQL (`DB_CONNECTION=pgsql`), database aplikasi `managjeh`, database test di `phpunit.xml` `managjeh_test`. Seluruh timestamp disimpan dalam **UTC** (`config('app.timezone') === 'UTC'`) dan ditampilkan/dievaluasi dalam **`Asia/Jakarta`**.
 - **Status Implementasi (`FACT`):**
-  - `Implemented`: Fondasi autentikasi (Login, Register, Verify Email, Reset Password, 2FA, Passkeys), pengaturan profil/keamanan/tema, serta koneksi PostgreSQL dan tabel queue dasar (`jobs`, `failed_jobs`).
-  - `Partially Implemented`: Halaman `/dashboard` (`resources/js/pages/dashboard.tsx` masih berisi `PlaceholderPattern`).
-  - `Not Implemented` (`Planned`): Seluruh fitur domain `F1`–`F11` (tabel `tasks`, `schedules`, `reminders`, `habits`, `habit_logs`, `messages`, `ai_usage`, kolom preferensi WA/jam tenang di `users`, Laravel Scheduler pengingat, Queue Jobs pengiriman WA, integrasi WhatsApp Gateway & Webhook, serta `AiService`).
+    - `Implemented`: Fondasi autentikasi (Login, Register, Verify Email, Reset Password, 2FA, Passkeys), pengaturan profil/keamanan/tema, serta koneksi PostgreSQL dan tabel queue dasar (`jobs`, `failed_jobs`).
+    - `Partially Implemented`: Halaman `/dashboard` (`resources/js/pages/dashboard.tsx` masih berisi `PlaceholderPattern`).
+    - `Not Implemented` (`Planned`): Seluruh fitur domain `F1`–`F11` (tabel `tasks`, `schedules`, `reminders`, `habits`, `habit_logs`, `messages`, `ai_usage`, kolom preferensi WA/jam tenang di `users`, Laravel Scheduler pengingat, Queue Jobs pengiriman WA, integrasi WhatsApp Gateway & Webhook, serta `AiService`).
 
 ## Indeks Dokumentasi Proyek
 
@@ -28,7 +28,7 @@
 1. Baca `AGENTS.md` dan [CLAUDE.md](CLAUDE.md) sebelum mulai bekerja.
 2. **Selalu baca [docs/PRD.md](docs/PRD.md) sebelum mengerjakan fitur apa pun**, dan gunakan ID requirement **`F1` s.d. `F11`** untuk melacak kebutuhan, kriteria penerimaan, serta pemetaan fitur yang dikerjakan.
 3. **Prioritaskan MVP (`F1`–`F6`, Minggu 1–3)** sebelum mengerjakan fitur Tahap 2 (`F7`–`F10`, Minggu 4–5) atau Tahap 3 (`F11`, Minggu 6), kecuali diminta secara eksplisit oleh pengguna.
-4. **Jangan mengembangkan fitur di luar ruang lingkup (*out of scope*)** seperti sistem multi-pengguna/multi-tenant, aplikasi mobile native, pembayaran, keuangan sederhana, timer fokus, atau impor otomatis jadwal kampus tanpa persetujuan eksplisit.
+4. **Jangan mengembangkan fitur di luar ruang lingkup (_out of scope_)** seperti sistem multi-pengguna/multi-tenant, aplikasi mobile native, pembayaran, keuangan sederhana, timer fokus, atau impor otomatis jadwal kampus tanpa persetujuan eksplisit.
 5. **Jangan mengasumsikan layanan eksternal sudah terintegrasi:** Saat ini WhatsApp Gateway, WhatsApp Webhook, Gemini API, Groq API, dan OpenRouter API **belum diimplementasikan (`Not Implemented`)**. Periksa kode aktual sebelum menulis atau memanggil service terkait.
 6. Periksa struktur repository dan implementasi kode aktual sebelum melakukan perubahan apa pun.
 7. Pahami pemisahan tanggung jawab antara Laravel Backend (routing, controller, FormRequest, Service, Queue Job, Scheduler, DB) dan React Frontend (UI, layout, form Inertia, TypeScript types).
@@ -48,6 +48,7 @@
 ## Dokumentasi sebagai Single Source of Truth
 
 Gunakan dokumentasi di root dan `docs/` sebagai referensi utama, tetapi tetap verifikasi langsung kode aktual saat mengerjakan tugas. Bedakan selalu antara fakta implementasi (`FACT`) dan kebutuhan produk yang direncanakan (`REQUIREMENT` / `PLANNED`). Jika dokumentasi berbeda dengan kode aktual:
+
 - Jangan langsung menganggap fitur yang berlabel `Planned` sudah terimplementasi di kode.
 - Periksa implementasi aktual di repository.
 - Identifikasi sumber ketidaksesuaian.
@@ -74,6 +75,7 @@ Gunakan dokumentasi di root dan `docs/` sebagai referensi utama, tetapi tetap ve
 This application is a Laravel application running on PHP 8.5. Always use the APIs that match the installed major version of each package — do not assume a version.
 
 Before relying on a package's API, confirm its installed version:
+
 - PHP packages: run `composer show --direct` to list direct dependencies with versions, or `composer show <vendor/package>` for a single package.
 - JS packages: check `package.json` for the installed versions.
 
@@ -144,7 +146,7 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 
 - Execute PHP in app context for debugging and testing code. Do not create models without user approval, prefer tests with factories instead. Prefer existing Artisan commands over custom tinker code.
 - Always use single quotes to prevent shell expansion: `php artisan tinker --execute 'Your::code();'`
-  - Double quotes for PHP strings inside: `php artisan tinker --execute 'User::where("active", true)->count();'`
+    - Double quotes for PHP strings inside: `php artisan tinker --execute 'User::where("active", true)->count();'`
 
 === php rules ===
 

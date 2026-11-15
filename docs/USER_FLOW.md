@@ -42,9 +42,9 @@ flowchart TD
 - **Registrasi & Verifikasi Email (`FACT`):** `POST /register` -> `CreateNewUser` -> kirim email verifikasi -> klik signed URL `GET /email/verify/{id}/{hash}` -> redirect `/dashboard`.
 - **Reset Password (`FACT`):** `POST /forgot-password` -> link email -> `POST /reset-password` (`ResetUserPassword`).
 - **Pengaturan Akun (`FACT`):**
-  - `/settings/profile`: ubah nama/email dan hapus akun (`ProfileController`). *(Pada Minggu 1 akan diperluas dengan input `nomor_wa`, `zona_waktu`, `jam_tenang_mulai`, `jam_tenang_selesai`).*
-  - `/settings/security`: ubah password, kelola TOTP 2FA, dan kelola Passkeys (`SecurityController`, dilindungi `RequirePassword`).
-  - `/settings/appearance`: ubah tema `light` / `dark` / `system`.
+    - `/settings/profile`: ubah nama/email dan hapus akun (`ProfileController`). _(Pada Minggu 1 akan diperluas dengan input `nomor_wa`, `zona_waktu`, `jam_tenang_mulai`, `jam_tenang_selesai`)._
+    - `/settings/security`: ubah password, kelola TOTP 2FA, dan kelola Passkeys (`SecurityController`, dilindungi `RequirePassword`).
+    - `/settings/appearance`: ubah tema `light` / `dark` / `system`.
 
 ---
 
@@ -83,7 +83,7 @@ flowchart LR
 
 ---
 
-## 5. Alur 6 & 9: Pengiriman Pengingat WhatsApp & Evaluasi Jam Tenang (*Quiet Hours*) (`REQUIREMENT` — `F3`, `F5`, `F8`)
+## 5. Alur 6 & 9: Pengiriman Pengingat WhatsApp & Evaluasi Jam Tenang (_Quiet Hours_) (`REQUIREMENT` — `F3`, `F5`, `F8`)
 
 > **Status:** `Not Implemented` (`Planned` — Minggu 2 & Minggu 3).
 

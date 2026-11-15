@@ -7,6 +7,7 @@ Instruksi kerja **Managjeh (Asisten AI Mahasiswa)** untuk Claude Code.
 ## Dokumen Referensi di `docs/`
 
 Baca dokumen yang relevan dengan tugas sebelum mengubah kode:
+
 - [README.md](README.md) — Overview Asisten AI Mahasiswa, status fitur `F1`–`F11`, setup, dan perintah dev/test/build
 - [docs/PRD.md](docs/PRD.md) — Visi produk, requirement `F1`–`F11`, kriteria penerimaan, roadmap 6 minggu & technical gap analysis
 - [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md) & [docs/FRONTEND_ARCHITECTURE.md](docs/FRONTEND_ARCHITECTURE.md) — Arsitektur aktual (`FACT`) vs target (`REQUIREMENT`) untuk Laravel 13 + Inertia v3 + React 19 + Scheduler/Queue + WhatsApp + `AiService`
@@ -24,7 +25,7 @@ Baca dokumen yang relevan dengan tugas sebelum mengubah kode:
 
 ## Batasan Utama Project
 
-- **Prioritaskan MVP (`F1`–`F6`)** dan jangan membangun fitur di luar ruang lingkup (*out of scope*: multi-user, mobile native, pembayaran, keuangan, timer fokus, impor jadwal otomatis) tanpa persetujuan.
+- **Prioritaskan MVP (`F1`–`F6`)** dan jangan membangun fitur di luar ruang lingkup (_out of scope_: multi-user, mobile native, pembayaran, keuangan, timer fokus, impor jadwal otomatis) tanpa persetujuan.
 - **Jangan mengasumsikan layanan eksternal (WhatsApp Gateway, Gemini, Groq, OpenRouter) sudah terintegrasi** di kode saat ini.
 - **Privasi AI:** Jangan pernah mengirimkan catatan harian sensitif, mood, atau `nomor_wa` ke provider AI.
 - **Kerahasiaan:** Jangan pernah menulis password, secret token, atau API key ke dalam kode maupun dokumentasi.
