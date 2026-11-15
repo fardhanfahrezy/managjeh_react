@@ -1,5 +1,7 @@
-import { Form, Head, Link, usePage } from '@inertiajs/react';
+import { Form, Head, Link, router, useForm, usePage } from '@inertiajs/react';
+import { useState } from 'react';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
+import WhatsAppVerificationController from '@/actions/App/Http/Controllers/Settings/WhatsAppVerificationController';
 import DeleteUser from '@/components/delete-user';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
@@ -28,6 +30,33 @@ export default function Profile({
     const isWhatsAppVerified = auth.user.whatsapp_verified_at !== null;
     const quietStart = (auth.user.reminder_quiet_start ?? '00:00').slice(0, 5);
     const quietEnd = (auth.user.reminder_quiet_end ?? '05:00').slice(0, 5);
+    const [sendingOtp, setSendingOtp] = useState(false);
+    const [otpSent, setOtpSent] = useState(false);
+    const otpForm = useForm({ otp: '' });
+
+    const handleSendOtp = () => {
+        setSendingOtp(true);
+        router.post(
+            WhatsAppVerificationController.sendOtp.url(),
+            {},
+            {
+                preserveScroll: true,
+                onSuccess: () => setOtpSent(true),
+                onFinish: () => setSendingOtp(false),
+            },
+        );
+    };
+
+    const handleVerifyOtp = (e: React.FormEvent) => {
+        e.preventDefault();
+        otpForm.post(WhatsAppVerificationController.verifyOtp.url(), {
+            preserveScroll: true,
+            onSuccess: () => {
+                otpForm.reset('otp');
+                setOtpSent(false);
+            },
+        });
+    };
 
     return (
         <>
@@ -265,6 +294,69 @@ export default function Profile({
                         </>
                     )}
                 </Form>
+
+                {auth.user.whatsapp_number && !isWhatsAppVerified && (
+                    <div className="space-y-3 rounded-lg border border-border bg-card p-4">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-foreground">
+                                    Verifikasi Nomor WhatsApp (OTP)
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                    Kirim kode OTP 6 digit ke{' '}
+                                    <span className="font-medium text-foreground tabular-nums">
+                                        {auth.user.whatsapp_number}
+                                    </span>{' '}
+                                    untuk mengaktifkan pengiriman pengingat.
+                                </p>
+                            </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={sendingOtp}
+                                onClick={handleSendOtp}
+                            >
+                                {sendingOtp
+                                    ? 'Mengirim...'
+                                    : otpSent
+                                      ? 'Kirim Ulang OTP'
+                                      : 'Kirim Kode OTP'}
+                            </Button>
+                        </div>
+
+                        <form
+                            onSubmit={handleVerifyOtp}
+                            className="flex flex-col gap-2 sm:flex-row sm:items-start"
+                        >
+                            <div className="flex-1 space-y-1">
+                                <Input
+                                    id="whatsapp_otp"
+                                    name="otp"
+                                    inputMode="numeric"
+                                    maxLength={6}
+                                    value={otpForm.data.otp}
+                                    onChange={(e) =>
+                                        otpForm.setData('otp', e.target.value)
+                                    }
+                                    placeholder="Masukkan 6 digit kode OTP"
+                                    className="tabular-nums"
+                                />
+                                <InputError message={otpForm.errors.otp} />
+                            </div>
+                            <Button
+                                type="submit"
+                                size="sm"
+                                disabled={
+                                    otpForm.processing ||
+                                    otpForm.data.otp.length !== 6
+                                }
+                            >
+                                Verifikasi OTP
+                            </Button>
+                        </form>
+                    </div>
+                )}
             </div>
 
             <DeleteUser />

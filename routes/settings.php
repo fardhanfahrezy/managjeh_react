@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
+use App\Http\Controllers\Settings\WhatsAppVerificationController;
 use Illuminate\Auth\Middleware\RequirePassword;
 use Illuminate\Support\Facades\Route;
 
@@ -10,6 +11,13 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');
+
+    Route::post('settings/whatsapp/send-otp', [WhatsAppVerificationController::class, 'sendOtp'])
+        ->middleware('throttle:5,1')
+        ->name('whatsapp.send-otp');
+    Route::post('settings/whatsapp/verify-otp', [WhatsAppVerificationController::class, 'verifyOtp'])
+        ->middleware('throttle:10,1')
+        ->name('whatsapp.verify-otp');
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {
