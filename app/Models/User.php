@@ -83,6 +83,14 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
         return $this->hasMany(Task::class);
     }
 
+    /**
+     * @return HasMany<CalendarEvent, $this>
+     */
+    public function calendarEvents(): HasMany
+    {
+        return $this->hasMany(CalendarEvent::class);
+    }
+
     public function canReceiveWhatsAppReminders(): bool
     {
         return $this->whatsapp_enabled
