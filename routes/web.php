@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AiPlannerController;
 use App\Http\Controllers\CalendarEventController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProjectController;
@@ -14,6 +15,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('tasks', TaskController::class)->except(['create', 'edit', 'show']);
     Route::get('calendar', [CalendarEventController::class, 'index'])->name('calendar.index');
     Route::resource('calendar-events', CalendarEventController::class)->only(['store', 'update', 'destroy']);
+    Route::get('ai-planner', [AiPlannerController::class, 'index'])->name('ai-planner.index');
+    Route::post('ai-planner/generate', [AiPlannerController::class, 'generate'])
+        ->middleware('throttle:ai-planner')
+        ->name('ai-planner.generate');
+    Route::post('ai-planner/reminders/approve', [AiPlannerController::class, 'approveReminder'])
+        ->name('ai-planner.approve-reminder');
 });
 
 require __DIR__.'/settings.php';

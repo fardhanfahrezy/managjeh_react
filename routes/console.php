@@ -9,3 +9,4 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('reminders:dispatch-due')->everyMinute();
+Schedule::command('ai-planner:generate-daily')->dailyAt('05:30');

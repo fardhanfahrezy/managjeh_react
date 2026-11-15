@@ -2,8 +2,10 @@
 
 namespace App\Services;
 
+use App\Enums\AiPlannerRunStatus;
 use App\Enums\ProjectStatus;
 use App\Enums\TaskStatus;
+use App\Models\AiPlannerRun;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
@@ -53,8 +55,7 @@ class DashboardAggregatorService
             'upcoming_tasks' => $upcomingTasks,
             'today_events' => $todayEvents,
             'active_projects' => $activeProjects,
-            // shortcut: Phase 6 will populate ai_priorities from ai_planner_runs once that table exists.
-            'ai_priorities' => null,
+            'ai_priorities' => $this->getTodayAiPriorities($user, $nowLocal->format('Y-m-d')),
             'whatsapp_status' => $this->getWhatsAppStatus($user),
             'completed_summary' => $completedSummary,
         ];
@@ -266,5 +267,28 @@ class DashboardAggregatorService
         }
 
         return str_repeat('*', $len - 4).substr($number, -4);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function getTodayAiPriorities(User $user, string $localDate): ?array
+    {
+        /** @var AiPlannerRun|null $run */
+        $run = $user->aiPlannerRuns()
+            ->where('planning_date', $localDate)
+            ->where('status', AiPlannerRunStatus::Success->value)
+            ->latest('id')
+            ->first();
+
+        if ($run === null || ! is_array($run->result)) {
+            return null;
+        }
+
+        return [
+            'provider' => $run->provider,
+            'summary' => is_string($run->result['summary'] ?? null) ? $run->result['summary'] : null,
+            'priorities' => is_array($run->result['priorities'] ?? null) ? $run->result['priorities'] : [],
+        ];
     }
 }
