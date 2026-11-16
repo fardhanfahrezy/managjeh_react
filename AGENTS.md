@@ -1,93 +1,204 @@
-# Managjeh (Personal OS Mahasiswa) — Panduan Utama AI Agent
+# Managjeh (Personal OS Mahasiswa) — Panduan Utama AI Coding Agent
 
-- **Produk:** Aplikasi web **Personal OS Mahasiswa** (_single-user sekarang, arsitektur siap multi-user_) untuk mengelola **Task**, **Project**, **Calendar (termasuk agenda berulang)**, **Dashboard**, **Pengingat WhatsApp**, dan **AI Planner** (rekomendasi 3 prioritas utama harian).
-- **Stack Aktual (`FACT`):** Laravel `13.42.0` (PHP `^8.3` / `8.5.12`), Inertia.js v3 (`3.7.0` / `@inertiajs/react` `^3.0.0`), React `19.2.0`, TypeScript `^5.7.2`, Tailwind CSS `v4`, Laravel Fortify `1.42.0` (2FA TOTP & Passkeys/WebAuthn, registrasi publik **dinonaktifkan** sesuai `D-01`), Laravel Wayfinder `0.1.23`, Vite+ (`vp` `1.4.0`), Pest `5.3.5`, Larastan `3.15.0` (level 7), Pint `1.32.3`.
-- **Database & Timezone (`FACT`):**
-    - PostgreSQL (`DB_CONNECTION=pgsql`), database aplikasi `managjeh`, database pengujian `managjeh_test` (`phpunit.xml`).
-    - Seluruh nama tabel dan kolom menggunakan **Bahasa Inggris `snake_case`**.
-    - Semua timestamp absolut disimpan dalam **UTC** (`config('app.timezone') === 'UTC'`, `CarbonImmutable` aktif).
-    - Timezone bersifat **user-configurable** pada kolom `users.timezone` (IANA timezone, default `'Asia/Jakarta'`). Tanggal agenda _all-day_ disimpan sebagai `date` lokal.
+> **Sumber Kebenaran Tertinggi (`Source of Truth`):** Source code aktual di repository (`app/`, `database/`, `routes/`, `resources/`, `config/`) dan hasil pengujian otomatis (`tests/`) adalah sumber kebenaran tertinggi untuk perilaku aplikasi. Selalu inspeksi implementasi yang sudah ada sebelum memodifikasi kode.
 
 ---
 
-## Status Implementasi Saat Ini (`FACT` per Phase)
+## 1. Project Overview & Status Implementasi (`FACT`)
 
-| Phase       | Cakupan                                                                      | Status Aktual (`FACT`)        | Detail Implementasi di Repository                                                                                                                                                                                     |
-| :---------- | :--------------------------------------------------------------------------- | :---------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Phase 0** | Repository Audit & Baseline                                                  | `Implemented`                 | Audit struktur, sinkronisasi spesifikasi MVP 1 & keputusan `D-01`–`D-15`.                                                                                                                                             |
-| **Phase 1** | Core Data (`users`, `projects`, `tasks`, Auth `D-01`, Policy, Request, Test) | `Implemented`                 | 8 migrasi aktif, model `User`, `Project`, `Task`, enum `ProjectStatus`, `TaskStatus`, `TaskPriority`, `ProjectPolicy`, `TaskPolicy`, FormRequests, command `php artisan user:provision`, dan **57 Pest tests lulus**. |
-| **Phase 2** | Task & Project UI + Settings Timezone/WA                                     | `Not Implemented` (`Planned`) | Perlu membuat `ProjectController`, `TaskController`, routes, dan halaman React Inertia (`tasks/*`, `projects/*`, perluasan `settings/profile.tsx`).                                                                   |
-| **Phase 3** | Calendar & Agenda Berulang (`D-08`)                                          | `Not Implemented` (`Planned`) | Perlu migrasi `calendar_events` (beserta recurrence rule & exception `D-08`), model `CalendarEvent`, `CalendarEventPolicy`, controller, dan halaman `calendar/index.tsx`.                                             |
-| **Phase 4** | Dashboard Aggregation                                                        | `Partially Implemented`       | Route `/dashboard` & `resources/js/pages/dashboard.tsx` masih berisi `PlaceholderPattern`; perlu `DashboardController` dan UI 8 komponen utama.                                                                       |
-| **Phase 5** | WhatsApp Reminder & OTP Verification (`D-02`, `D-05`–`D-07`, `D-14`)         | `Not Implemented` (`Planned`) | Perlu migrasi `reminders`, model `Reminder`, `WhatsAppGatewayInterface`, `ReminderService` (quiet hours `00:00–05:00`), `SendWhatsAppMessageJob`, Scheduler, dan OTP verification.                                    |
-| **Phase 6** | AI Planner (`Gemini → Grok → OpenRouter → Fallback`, `D-03`, `D-04`, `D-12`) | `Not Implemented` (`Planned`) | Perlu migrasi `ai_planner_runs`, `AiPlannerProviderInterface`, provider adapters (`Gemini`, `Grok`, `OpenRouter`, `Fallback`), `AiPlannerService`, Scheduler/trigger otomatis, dan halaman `ai-planner/index.tsx`.    |
-| **Phase 7** | Hardening, Retensi Log (`D-11`, `D-15`), Regression & Deployment             | `Not Implemented` (`Planned`) | Perlu command retensi/cleanup log & soft-delete, rate limiter endpoint AI/WA, ekspor data, dan regresi menyeluruh.                                                                                                    |
+- **Produk:** Aplikasi web **Personal OS Mahasiswa** (_single-user sekarang, arsitektur siap multi-user_) untuk mengelola **Task (beserta subtugas 1 tingkat)**, **Project**, **Calendar (termasuk agenda berulang)**, **Dashboard**, **Pengingat WhatsApp**, **AI Planner** (rekomendasi 3 prioritas utama harian), serta **Ekspor Data & Retensi Privasi**.
+- **Status Proyek:** **Seluruh Phase 0 s.d. Phase 7 (MVP 1) telah selesai diimplementasikan dan terverifikasi (`Implemented & Verified`).**
 
----
-
-## Ringkasan Keputusan Final (`D-01` s.d. `D-15`) — WAJIB DIIKUTI
-
-| ID         | Keputusan Final (Mengikat Seluruh Implementasi)                                                                                                                                                                                                                                                                                              |
-| :--------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`D-01`** | **Registrasi publik dinonaktifkan** (`Features::registration()` dihapus dari `config/fortify.php`). Akun dibuat melalui provisioning manual (`php artisan user:provision`) atau undangan administrator.                                                                                                                                      |
-| **`D-02`** | **WhatsApp Gateway pihak ketiga berbasis API** melalui kontrak `WhatsAppGatewayInterface` (adapter pattern) agar vendor mudah diganti. WhatsApp pada MVP **hanya kanal pengiriman notifikasi** (pengelolaan data dilakukan di website).                                                                                                      |
-| **`D-03`** | **Urutan fallback AI Planner:** `Gemini` (utama) → `Grok` (cadangan 1) → `OpenRouter` (cadangan 2) → `Rule-based Fallback` (deterministik tanpa AI).                                                                                                                                                                                         |
-| **`D-04`** | **Model AI configurable** melalui `.env` dan `config/services.php` (`GEMINI_MODEL`, `GROK_MODEL`, `OPENROUTER_MODEL`).                                                                                                                                                                                                                       |
-| **`D-05`** | **Multi-reminder per task:** Satu tugas dapat memiliki beberapa pengingat (mis. H-1, H-1 jam, atau pengingat tambahan sesuai urgensi). Pengingat yang tidak lagi relevan wajib dibatalkan (`cancelled`).                                                                                                                                     |
-| **`D-06`** | **Quiet hours default `00:00–05:00`** berdasarkan `users.timezone`. Pengingat yang jatuh pada jam tenang ditunda ke waktu pertama yang diizinkan (`05:00` waktu lokal pengguna) selama masih relevan.                                                                                                                                        |
-| **`D-07`** | **Penjadwalan pengingat cerdas:** Backend menghitung slot waktu kosong dari kalender; AI membantu merekomendasikan waktu/konteks pengingat dan prioritas berdasarkan deadline, prioritas, estimasi durasi, dan ketersediaan waktu.                                                                                                           |
-| **`D-08`** | **Agenda berulang masuk MVP:** Tabel `calendar_events` mendukung _recurrence rule_ (`rrule` / frekuensi), pengubahan satu kejadian (_single occurrence override_ via `parent_event_id` & `recurrence_id`), seluruh rangkaian, pengecualian (`recurrence_exceptions`), serta pembatalan kejadian secara idempotent.                           |
-| **`D-09`** | **Subtugas maksimal 1 tingkat:** Tabel `tasks` memiliki `parent_id` (`nullable`). Backend (`Task` model & FormRequest) memvalidasi agar subtugas tidak memiliki subtugas lagi (maksimal kedalaman = 1). UI subtugas dapat dibangun setelah fitur task utama stabil.                                                                          |
-| **`D-10`** | **Kalender internal sebagai sumber utama:** Tidak ada integrasi Google Calendar pada MVP, namun struktur model tidak menghambat penambahan kolom sinkronisasi eksternal di masa depan.                                                                                                                                                       |
-| **`D-11`** | **Soft delete (`deleted_at`):** Digunakan pada `projects`, `tasks`, dan `calendar_events`. Penghapusan permanen dilakukan melalui kebijakan retensi terjadwal.                                                                                                                                                                               |
-| **`D-12`** | **AI Planner otomatis & manual:** Berjalan otomatis melalui Scheduler harian serta pemicu perubahan data relevan (tugas/agenda berubah signifikan), dan dapat dipicu manual oleh pengguna. **AI dilarang mengubah task, project, atau agenda tanpa persetujuan pengguna.**                                                                   |
-| **`D-13`** | **Reliabilitas AI tanpa batas kuota harian buatan:** Tidak membatasi jumlah pemakaian pribadi secara artifisial, tetapi **wajib** menerapkan timeout, retry terbatas, rate-limit handling, fallback provider berjenjang, pencatatan pemakaian/biaya di `ai_planner_runs`, dan _circuit breaker_ (via Laravel Cache).                         |
-| **`D-14`** | **Verifikasi nomor WhatsApp wajib:** Menggunakan OTP (atau verifikasi gateway). Pesan pengingat **dilarang dikirim** jika `whatsapp_enabled === false`, `whatsapp_number === null`, atau `whatsapp_verified_at === null` (gunakan `$user->canReceiveWhatsAppReminders()`). Mengubah nomor WA otomatis mereset `whatsapp_verified_at = null`. |
-| **`D-15`** | **Minimisasi data & retensi log:** Jangan pernah menyimpan OTP mentah, API key, kredensial, atau isi percakapan sensitif di log/database. Simpan metadata minimum di `reminders` dan `ai_planner_runs` dengan jadwal pembersihan otomatis.                                                                                                   |
+| Phase       | Cakupan                                                                      | Status Aktual (`FACT`)   | Implementasi Aktual di Repository                                                                                                                                                                                                                                                                                                                      |
+| :---------- | :--------------------------------------------------------------------------- | :----------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Phase 0** | Repository Audit & Baseline                                                  | `Implemented & Verified` | Audit struktur, sinkronisasi spesifikasi MVP 1 & keputusan `D-01`–`D-15`.                                                                                                                                                                                                                                                                              |
+| **Phase 1** | Core Data (`users`, `projects`, `tasks`, Auth `D-01`, Policy, Request, Test) | `Implemented & Verified` | Migrasi awal, model `User`, `Project`, `Task`, enum `ProjectStatus`, `TaskStatus`, `TaskPriority`, `ProjectPolicy`, `TaskPolicy`, FormRequests, dan command `php artisan user:provision`.                                                                                                                                                              |
+| **Phase 2** | Task & Project UI + Settings Timezone/WA                                     | `Implemented & Verified` | `ProjectController`, `TaskController`, halaman `tasks/index.tsx`, `projects/index.tsx`, `projects/show.tsx`, komponen `task-form-dialog.tsx` & `task-row-item.tsx`, serta perluasan `settings/profile.tsx`.                                                                                                                                            |
+| **Phase 3** | Calendar & Agenda Berulang (`D-08`)                                          | `Implemented & Verified` | Migrasi `calendar_events`, model `CalendarEvent`, `CalendarEventPolicy`, `RecurrenceExpanderService`, `ScheduleConflictDetector`, `CalendarEventController`, dan halaman `calendar/index.tsx` (`Day`/`Week`/`Month`).                                                                                                                                  |
+| **Phase 4** | Dashboard Aggregation                                                        | `Implemented & Verified` | `DashboardAggregatorService`, `DashboardController`, dan halaman `dashboard.tsx` dengan 8 bagian ringkasan terpadu.                                                                                                                                                                                                                                    |
+| **Phase 5** | WhatsApp Reminder & OTP Verification (`D-02`, `D-05`–`D-07`, `D-14`)         | `Implemented & Verified` | Migrasi `reminders`, model `Reminder`, `WhatsAppGatewayInterface` (`FonnteWhatsAppGateway`, `HttpWhatsAppGateway`, `NullWhatsAppGateway`), `QuietHoursAdjuster`, `ReminderSynchronizer`, `SendWhatsAppMessageJob`, `DispatchDueRemindersCommand`, dan `WhatsAppVerificationController`.                                                                |
+| **Phase 6** | AI Planner (`Gemini → Grok → OpenRouter → Fallback`, `D-03`, `D-04`, `D-12`) | `Implemented & Verified` | Migrasi `ai_planner_runs`, model `AiPlannerRun`, `AiPlannerProviderInterface` (`GeminiPlannerProvider`, `GrokPlannerProvider`, `OpenRouterPlannerProvider`, `FallbackPlannerProvider`), `AiPromptBuilder`, `AiPlannerService` (circuit breaker & validator), `GenerateDailyAiPlansCommand`, `AiPlannerController`, dan halaman `ai-planner/index.tsx`. |
+| **Phase 7** | Hardening, Retensi Log (`D-11`, `D-15`), Data Export & Regression            | `Implemented & Verified` | `PruneRetentionDataCommand` (`app:prune-retention-data`), rate limiters (`ai-planner`, `whatsapp-otp`, `data-export`), hook `use-rate-limit-cooldown.ts`, endpoint `ProfileController@export`, UI **Data & Privasi**, dan **82 Pest tests lulus (`551` assertions)**.                                                                                  |
 
 ---
 
-## Indeks Dokumentasi Proyek (`Single Source of Truth`)
+## 2. Technology Stack (`FACT`)
 
-1. [README.md](README.md) — Overview Personal OS Mahasiswa, status Phase 0–7, setup, provisioning user, dan daftar perintah.
-2. [CLAUDE.md](CLAUDE.md) — Ringkasan eksekutif untuk AI coding agent.
-3. [docs/PRD.md](docs/PRD.md) — Spesifikasi Teknis MVP 1 lengkap, cakupan domain, keputusan `D-01`–`D-15`, roadmap Phase 0–7, dan Acceptance Criteria.
-4. [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) — Skema PostgreSQL aktual (`Phase 1 Implemented`) & spesifikasi migrasi detail untuk `calendar_events`, `reminders`, dan `ai_planner_runs`.
-5. [docs/BUSINESS_RULES.md](docs/BUSINESS_RULES.md) — Aturan bisnis detail untuk Task, Project, Calendar (termasuk recurrence `D-08`), Quiet Hours (`00:00–05:00`), WhatsApp Reminder, dan AI Planner.
-6. [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md) — Arsitektur modular Laravel 13 + Inertia v3 + Queue/Scheduler + Provider/Gateway contracts.
-7. [docs/FRONTEND_ARCHITECTURE.md](docs/FRONTEND_ARCHITECTURE.md) — Rancangan 8 halaman MVP, TypeScript interfaces, kontrak Inertia props, dan panduan PAGE ARCHITECT.
-8. [docs/API_INTEGRATION.md](docs/API_INTEGRATION.md) — Daftar route Inertia, spesifikasi `WhatsAppGatewayInterface`, `AiPlannerProviderInterface`, dan skema JSON output AI Planner.
-9. [docs/USER_FLOW.md](docs/USER_FLOW.md) — Diagram alur pengguna & sistem untuk seluruh modul MVP 1.
-10. [docs/SECURITY.md](docs/SECURITY.md) — Otorisasi kepemilikan (`user_id`), proteksi webhook, sanitasi prompt AI, dan privasi data.
-11. [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Konfigurasi produksi, Queue Worker, Scheduler, dan evaluasi hosting.
-12. [docs/DEVELOPMENT_GUIDELINES.md](docs/DEVELOPMENT_GUIDELINES.md) — Panduan implementasi langkah demi langkah untuk Phase 2 s.d. Phase 7 bagi AI Agent.
+- **Backend:** PHP `^8.3` (teruji pada `8.5.12`), Laravel Framework `^13.17` (`13.42.0`), Inertia.js Laravel `^3.0` (`3.7.0`), Laravel Fortify `^1.37.2` (`1.42.0` — 2FA TOTP & Passkeys/WebAuthn, registrasi publik **dinonaktifkan** sesuai `D-01`), Laravel Wayfinder `^0.1.14` (`0.1.23`), `@laravel/passkeys` `^0.2.0`.
+- **Database:** PostgreSQL (`DB_CONNECTION=pgsql`), database utama `managjeh`, database pengujian `managjeh_test` (`phpunit.xml`).
+- **Frontend:** React `^19.2.0` (`babel-plugin-react-compiler`), `@inertiajs/react` `^3.0.0`, TypeScript `^5.7.2`, Tailwind CSS `v4` (`@tailwindcss/vite`), Radix UI primitives, Lucide React icons, Sonner toast.
+- **Tooling & Quality:** Vite+ (`vite-plus` `1.4.0` / `vp`), Pest `^5.3` (`5.3.5`), Larastan/PHPStan `^3.9` (`3.15.0`, level 7), Laravel Pint `^1.27` (`1.32.3`).
 
 ---
 
-## Aturan Wajib Seluruh AI Agent
+## 3. Repository Architecture
 
-1. **Baca dokumen sebelum menulis kode:** Selalu baca `AGENTS.md`, `docs/PRD.md`, `docs/DATABASE_SCHEMA.md`, dan `docs/DEVELOPMENT_GUIDELINES.md` sebelum memulai tahap apa pun.
-2. **Kerjakan bertahap sesuai urutan Phase (`Phase 2` → `Phase 3` → `Phase 4` → `Phase 5` → `Phase 6` → `Phase 7`):** Jangan melompati tahap fondasi dan jangan mengklaim fitur selesai hanya karena halaman berhasil dirender.
-3. **Jaga batas ruang lingkup MVP 1:** Jangan membangun fitur di luar MVP (keuangan, habit tracker, mood/tidur, catatan kuliah, karier, kontak, jurnal mingguan, Google Calendar eksternal, atau perintah perubahan data via balasan WhatsApp).
-4. **Gunakan penamaan Bahasa Inggris `snake_case`:** Seluruh tabel (`users`, `projects`, `tasks`, `calendar_events`, `reminders`, `ai_planner_runs`), kolom, model, controller, dan route wajib menggunakan Bahasa Inggris sesuai `docs/DATABASE_SCHEMA.md`. Jangan gunakan nama tabel/kolom lama seperti `schedules`, `judul`, `tenggat`, atau `kirim_pada`.
-5. **Hormati kode Phase 1 yang sudah ada:**
-    - Gunakan model [User.php](app/Models/User.php), [Project.php](app/Models/Project.php), dan [Task.php](app/Models/Task.php) beserta enum [ProjectStatus.php](app/Enums/ProjectStatus.php), [TaskStatus.php](app/Enums/TaskStatus.php), dan [TaskPriority.php](app/Enums/TaskPriority.php).
-    - Gunakan [ProjectPolicy.php](app/Policies/ProjectPolicy.php), [TaskPolicy.php](app/Policies/TaskPolicy.php), serta FormRequest di `app/Http/Requests/Projects/` dan `app/Http/Requests/Tasks/`.
-6. **Keamanan & Kepemilikan Data (`user_id`):**
-    - Jangan pernah mempercayai `user_id` dari request frontend. Ambil pengguna dari `$request->user()`.
-    - Seluruh query wajib dibatasi pada data milik `$request->user()->id`.
-    - Gunakan Policy (`$this->authorize(...)` atau `Gate::authorize(...)`) pada setiap aksi controller.
-7. **Zona Waktu (`UTC` di DB vs `users.timezone` di UI):**
-    - Simpan semua `timestamp` (`due_at`, `completed_at`, `starts_at`, `ends_at`, `scheduled_at`, `sent_at`, `failed_at`) dalam **UTC**.
-    - Simpan tanggal kalender (`start_date`, `due_date`, `end_date`, `planning_date`) sebagai `date` (`Y-m-d`) sesuai kalender lokal pengguna.
-    - Gunakan `$user->timezone` (default `'Asia/Jakarta'`) saat mengonversi input waktu lokal ke UTC dan saat mengevaluasi "hari ini" atau jam tenang (`00:00–05:00`).
-8. **Verifikasi Wajib Sebelum Menyelesaikan Tugas:**
-    - Jalankan `php artisan test` (semua test lama dan baru wajib hijau).
-    - Jalankan `php vendor/bin/phpstan analyse --memory-limit=512M` (wajib 0 error pada level 7).
-    - Jalankan `php vendor/bin/pint --dirty --format agent`.
-    - Jalankan `npx.cmd tsc --noEmit` (atau `npm run types:check`).
-9. **Format Laporan Setiap Tahap:**
-   Setiap selesai mengerjakan satu tahap, laporkan: (1) Tujuan, (2) File yang dibuat, (3) File yang diubah, (4) Keputusan teknis, (5) Migration, (6) Test yang dijalankan & hasilnya, (7) Risiko/keputusan terbuka, dan (8) Pekerjaan yang belum selesai.
+- `app/Contracts/` — Interface abstraksi eksternal: [AiPlannerProviderInterface.php](app/Contracts/AiPlannerProviderInterface.php) dan [WhatsAppGatewayInterface.php](app/Contracts/WhatsAppGatewayInterface.php).
+- `app/Enums/` — Backed string enums (`ProjectStatus`, `TaskStatus`, `TaskPriority`, `ReminderStatus`, `AiPlannerRunStatus`).
+- `app/Models/` — Model Eloquent (`User`, `Project`, `Task`, `CalendarEvent`, `Reminder`, `AiPlannerRun`) dengan atribut `#[Fillable([...])]` atau `$fillable` eksplisit dan invariant domain di `booted()`.
+- `app/Policies/` — Otorisasi kepemilikan (`ProjectPolicy`, `TaskPolicy`, `CalendarEventPolicy`).
+- `app/Http/Requests/` — FormRequest terpisah per domain (`Projects/*`, `Tasks/*`, `Calendar/*`, `Settings/*`).
+- `app/Http/Controllers/` — Controller tipis yang memanggil FormRequest, Policy, dan Service, lalu mengembalikan `Inertia::render()`, `RedirectResponse`, atau `JsonResponse` (khusus ekspor data).
+- `app/Services/` — Logika bisnis domain (`AiPlanner/*`, `Calendar/*`, `Reminder/*`, `WhatsApp/*`, `DashboardAggregatorService.php`).
+- `app/Jobs/` & `app/Console/Commands/` — Pemrosesan latar belakang (`SendWhatsAppMessageJob`) dan CLI commands (`user:provision`, `reminders:dispatch-due`, `ai-planner:generate-daily`, `app:prune-retention-data`).
+- `resources/js/` — Aplikasi SPA React 19 + Inertia v3 (`pages/`, `components/`, `hooks/`, `layouts/`, `types/`, serta `actions/` & `routes/` hasil generate Wayfinder).
+
+---
+
+## 4. Coding & Naming Conventions
+
+1. **Bahasa Kode & Database:** Seluruh nama tabel (`users`, `projects`, `tasks`, `calendar_events`, `reminders`, `ai_planner_runs`), kolom, class, method, variabel, dan route wajib menggunakan **Bahasa Inggris** (`snake_case` untuk database/route payload, `camelCase` untuk method/properti PHP & JS, `PascalCase` untuk class/komponen/tipe). Jangan pernah menggunakan nama tabel/kolom Bahasa Indonesia seperti `schedules`, `judul`, `tenggat`, atau `kirim_pada`.
+2. **Bahasa Antarmuka (UI Copy):** Label antarmuka, pesan toast, dan teks bantuan pengguna menggunakan **Bahasa Indonesia** yang jelas dan ringkas.
+3. **Strict Types & Return Types:** Gunakan explicit parameter type hints, return types, dan PHPDoc array shapes yang lolos **PHPStan Level 7** dan `tsc --noEmit`.
+
+---
+
+## 5. Frontend Architecture (`resources/js/`)
+
+- **Wayfinder Routing:** Jangan menulis URL hardcoded di komponen React. Gunakan helper yang di-generate oleh Laravel Wayfinder dari `@/routes/*` atau `@/actions/*`. Jika route/controller berubah, jalankan `php artisan wayfinder:generate --with-form`.
+- **Layout Wrapper:** Halaman utama dirender di dalam `AppLayout` (sidebar kiri + area konten utama). Konsistensi wrapper konten utama halaman adalah `<div className="flex flex-1 flex-col gap-5 p-4 md:p-6">` (atau `gap-6`).
+- **Rate Limit Cooldown UX:** Untuk aksi POST sensitif yang dibatasi throttle (seperti kirim OTP WhatsApp dan generate AI Planner), gunakan hook [use-rate-limit-cooldown.ts](resources/js/hooks/use-rate-limit-cooldown.ts) pada callback `onHttpException` Inertia agar respons HTTP `429` menampilkan hitung mundur inline (`role="status" aria-live="polite"`) alih-alih modal error mentah.
+
+---
+
+## 6. Backend Architecture (`app/`)
+
+- **Immutable Dates:** `Date::use(CarbonImmutable::class)` aktif secara global di `AppServiceProvider`.
+- **Service & Adapter Pattern:**
+    - Pengiriman WhatsApp wajib melalui `WhatsAppGatewayInterface` (diikat di `AppServiceProvider` ke `FonnteWhatsAppGateway`, `HttpWhatsAppGateway`, atau `NullWhatsAppGateway` sesuai `config('services.whatsapp.driver')`).
+    - Pembuatan rencana AI wajib melalui `AiPlannerService` yang mengorkestrasi `GeminiPlannerProvider` → `GrokPlannerProvider` → `OpenRouterPlannerProvider` → `FallbackPlannerProvider`.
+- **Sinkronisasi Otomatis:** Perubahan `Task` atau `CalendarEvent` otomatis memicu `ReminderSynchronizer` untuk menjadwalkan ulang atau membatalkan reminder `pending`.
+
+---
+
+## 7. Database & Timezone Conventions
+
+- **UTC di Database:** `config('app.timezone') === 'UTC'`. Seluruh kolom `timestamp` (`due_at`, `completed_at`, `starts_at`, `ends_at`, `scheduled_at`, `sent_at`, `failed_at`, `whatsapp_verified_at`) wajib disimpan dalam **UTC**.
+- **Tanggal Lokal:** Kolom `date` (`start_date`, `due_date`, `end_date`, `recurrence_until`, `planning_date`) disimpan sebagai tanggal kalender lokal pengguna (`Y-m-d`).
+- **Zona Waktu Pengguna:** Gunakan `$user->timezone` (IANA timezone, default `'Asia/Jakarta'`) saat mengonversi input waktu lokal ke UTC (mis. di `StoreTaskRequest::normalizedValidated()`, `StoreCalendarEventRequest::normalizedValidated()`) dan saat mengevaluasi "hari ini" atau _quiet hours_ (`00:00–05:00`).
+- **Soft Deletes (`D-11`):** Digunakan pada `Project`, `Task`, dan `CalendarEvent`. Penghapusan permanen (`forceDelete`) dilakukan oleh `PruneRetentionDataCommand` setelah > 30 hari.
+
+---
+
+## 8. API, Routing & Rate Limiting Conventions
+
+- Seluruh route aplikasi didefinisikan di [routes/web.php](routes/web.php) dan [routes/settings.php](routes/settings.php) (lihat daftar lengkap 27 route di [docs/API_INTEGRATION.md](docs/API_INTEGRATION.md)).
+- Named rate limiters didefinisikan di [AppServiceProvider.php](app/Providers/AppServiceProvider.php):
+    - `ai-planner`: 10 request / menit per user ID (`POST /ai-planner/generate`).
+    - `whatsapp-otp`: 5 request / menit per user ID (`POST /settings/whatsapp/send-otp`).
+    - `data-export`: 5 request / menit per user ID (`GET /settings/profile/export`).
+
+---
+
+## 9. Validation & Authorization Rules
+
+1. **Jangan pernah mempercayai `user_id` dari request frontend.** Selalu ambil pengguna dari `$request->user()`.
+2. **Batasi setiap query** pada data milik `$request->user()->id` (atau gunakan relasi `$request->user()->tasks()`, `$request->user()->projects()`, `$request->user()->calendarEvents()`).
+3. **Wajib panggil Policy** (`$this->authorize('view'|'update'|'delete', $model)`) pada setiap aksi controller yang mengakses resource spesifik.
+4. **Cegah relasi lintas-user:** Pengaitan `project_id`, `parent_id`, atau `task_id` wajib memverifikasi bahwa resource target dimiliki oleh `user_id` yang sama.
+
+---
+
+## 10. Security & Privacy Requirements (`D-01`, `D-14`, `D-15`)
+
+- **Registrasi Publik Nonaktif (`D-01`):** `Features::registration()` tidak diaktifkan di `config/fortify.php`. Akun baru dibuat melalui `php artisan user:provision`.
+- **Verifikasi WhatsApp (`D-14`):** Jangan pernah mengirim pengingat WhatsApp jika `$user->canReceiveWhatsAppReminders()` bernilai `false`. Mengubah `whatsapp_number` wajib mereset `whatsapp_verified_at = null`.
+- **Perlindungan Rahasia & Sanitasi Prompt (`D-15`):**
+    - Jangan pernah menyimpan kode OTP mentah di database atau log (simpan hanya hash SHA-256 di cache dengan TTL 5 menit).
+    - Jangan pernah mengirim `email`, `whatsapp_number`, `password`, token, atau kredensial ke provider AI (`AiPlannerContext::toSanitizedSnapshot()`).
+    - Endpoint ekspor data (`ProfileController@export`) hanya boleh mengekspor kolom yang di-whitelist secara eksplisit.
+
+---
+
+## 11. Testing & Code Quality Requirements
+
+Setiap perubahan kode **wajib** lulus seluruh pemeriksaan berikut sebelum dinyatakan selesai:
+
+```bash
+# 1. Format kode PHP (Laravel Pint)
+php vendor/bin/pint --dirty --format agent
+
+# 2. Static analysis PHPStan Level 7 (wajib 0 error)
+php vendor/bin/phpstan analyse --memory-limit=512M
+
+# 3. Pemeriksaan tipe TypeScript (wajib 0 error)
+npx.cmd tsc --noEmit
+
+# 4. Pemeriksaan format & lint frontend/markdown (Vite+ vp check)
+npx.cmd vp check --fix
+
+# 5. Seluruh test suite Pest (PostgreSQL managjeh_test)
+php artisan test
+
+# Atau jalankan seluruh pipeline CI sekaligus:
+composer ci:check
+```
+
+---
+
+## 12. UI/UX & Accessibility Requirements (`DESIGN.md` — "The Quiet Desk")
+
+- Ikuti spesifikasi visual di [DESIGN.md](DESIGN.md): keluarga font tunggal lokal **Inter** dengan `tabular-nums` pada angka/waktu/persentase, kanvas hangat _Bright Snow_ (`#fafaf9`), permukaan kartu _Pure White_ (`#ffffff`) berborder `1px` _Hairline Stone_ (`#e7e5e4`), aksen utama _Shamrock Emerald_ (`#059669`) hanya untuk aksi primer, serta _Ochre Amber_ (`#d97706`) / _Crimson Alert_ (`#dc2626`) khusus untuk sinyal status nyata.
+- Setiap tombol yang hanya berisi ikon (`size="icon"`) **wajib** memiliki atribut `aria-label` yang deskriptif.
+- Pastikan tata letak responsif mulai dari lebar mobile `375px` hingga desktop tanpa _horizontal overflow_.
+
+---
+
+## 13. Ringkasan Keputusan Final (`D-01` s.d. `D-15`) — Mengikat Seluruh Pengembangan
+
+| ID         | Keputusan Final (`Implemented & Verified`)                                                                                                                           |
+| :--------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`D-01`** | Registrasi publik dinonaktifkan (`config/fortify.php`). Akun dibuat melalui `php artisan user:provision`.                                                            |
+| **`D-02`** | WhatsApp Gateway berbasis adapter `WhatsAppGatewayInterface` (`FonnteWhatsAppGateway`, `HttpWhatsAppGateway`, `NullWhatsAppGateway`). Satu arah (notifikasi & OTP).  |
+| **`D-03`** | Urutan fallback AI Planner: `Gemini` → `Grok` → `OpenRouter` → `Rule-based Fallback`.                                                                                |
+| **`D-04`** | Model AI configurable melalui `.env` & `config/services.php` (`GEMINI_MODEL`, `GROK_MODEL`, `OPENROUTER_MODEL`).                                                     |
+| **`D-05`** | Multi-reminder per task (`before_24h`, `before_1h`, `ai_recommended`) dan per agenda (`event_start`). Reminder yang tidak relevan otomatis dibatalkan (`cancelled`). |
+| **`D-06`** | Quiet hours default `00:00–05:00` waktu lokal pengguna (`users.timezone`); jadwal yang jatuh pada jam tenang digeser ke akhir jam tenang oleh `QuietHoursAdjuster`.  |
+| **`D-07`** | Backend menghitung slot waktu kosong dari kalender; AI merekomendasikan prioritas & waktu pengingat berdasarkan deadline, prioritas, dan slot kosong.                |
+| **`D-08`** | Agenda berulang (`recurrence_rule`, `recurrence_until`, `recurrence_exceptions`, serta override satu kejadian via `parent_event_id` & `recurrence_id`).              |
+| **`D-09`** | Subtugas maksimal 1 tingkat (`tasks.parent_id`), divalidasi di `StoreTaskRequest`, `UpdateTaskRequest`, dan `Task::booted()`.                                        |
+| **`D-10`** | Kalender internal sebagai sumber utama pada MVP 1 (tanpa sinkronisasi Google Calendar eksternal).                                                                    |
+| **`D-11`** | Soft delete (`deleted_at`) pada `projects`, `tasks`, dan `calendar_events`; pembersihan permanen > 30 hari oleh `app:prune-retention-data`.                          |
+| **`D-12`** | AI Planner berjalan otomatis (Scheduler harian `05:30`) maupun manual; AI tidak pernah memodifikasi task/project/agenda tanpa klik persetujuan pengguna.             |
+| **`D-13`** | Reliabilitas AI dengan timeout (`AI_PLANNER_TIMEOUT`), circuit breaker cache (3 gagal / 300 dtk), rate limit (`10/menit`), dan pencatatan di `ai_planner_runs`.      |
+| **`D-14`** | Verifikasi nomor WhatsApp wajib via OTP (`WhatsAppVerificationController`) sebelum `$user->canReceiveWhatsAppReminders()` bernilai `true`.                           |
+| **`D-15`** | Minimisasi data, sanitasi prompt AI, whitelist ekspor JSON (`ProfileController@export`), dan pemangkasan log otomatis > 30 hari.                                     |
+
+---
+
+## 14. Documentation Maintenance Rules & Indeks Dokumen
+
+Setiap kali Anda mengubah arsitektur, skema database, route, variabel `.env`, atau command CLI, **Anda wajib memperbarui dokumentasi terkait pada giliran kerja yang sama**:
+
+1. [README.md](README.md) — Dokumentasi utama instalasi, konfigurasi, command, dan arsitektur.
+2. [CLAUDE.md](CLAUDE.md) — Ringkasan orientasi cepat untuk Claude Code.
+3. [DESIGN.md](DESIGN.md) & [PRODUCT.md](PRODUCT.md) — Design System **"The Quiet Desk"** & konteks produk.
+4. [docs/PRD.md](docs/PRD.md) — Spesifikasi Teknis MVP 1, Keputusan `D-01`–`D-15`, & Riwayat Phase 0–7.
+5. [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) — Skema PostgreSQL (11 migrasi aktif) & kebijakan retensi.
+6. [docs/BUSINESS_RULES.md](docs/BUSINESS_RULES.md) — Aturan bisnis terverifikasi untuk seluruh modul.
+7. [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md) — Arsitektur modular Laravel 13 + Inertia v3 + Queue/Scheduler.
+8. [docs/FRONTEND_ARCHITECTURE.md](docs/FRONTEND_ARCHITECTURE.md) — Kontrak TypeScript `models.ts`, halaman React, dan hooks.
+9. [docs/API_INTEGRATION.md](docs/API_INTEGRATION.md) — Daftar 27 route aplikasi, `WhatsAppGatewayInterface`, & `AiPlannerProviderInterface`.
+10. [docs/USER_FLOW.md](docs/USER_FLOW.md) — Diagram alur pengguna & background jobs.
+11. [docs/SECURITY.md](docs/SECURITY.md) — Otorisasi `user_id`, OTP hashing, sanitasi prompt AI, rate limiting, & privasi data.
+12. [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Konfigurasi produksi, Queue Worker, Scheduler, & CI/CD.
+13. [docs/DEVELOPMENT_GUIDELINES.md](docs/DEVELOPMENT_GUIDELINES.md) — Referensi implementasi Phase 0–7 & playbook pengembangan fitur baru bagi AI Agent.
+
+---
+
+## 15. Mandatory Rules for AI Coding Agents
+
+- **Inspect existing implementation before modifying code.**
+- **Follow existing architecture and conventions.**
+- **Avoid unnecessary dependencies.**
+- **Do not duplicate existing services, hooks, or components.**
+- **Do not modify unrelated modules.**
+- **Preserve backward compatibility unless explicitly requested.**
+- **Never expose credentials, tokens, OTPs, or sensitive user information.**
+- **Never claim tests passed without executing them.**
+- **Update relevant documentation whenever architecture, behavior, configuration, or commands change.**
+- **Run relevant tests and quality checks (`composer ci:check`) before declaring work complete.**
+- **Report assumptions, limitations, and unverified behavior honestly.**
 
 <laravel-boost-guidelines>
 === foundation rules ===
