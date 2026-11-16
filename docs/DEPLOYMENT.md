@@ -31,11 +31,12 @@ LOG_STACK=single
 LOG_LEVEL=warning
 
 DB_CONNECTION=pgsql
-DB_HOST=127.0.0.1
+DB_HOST=aws-1-ap-northeast-1.pooler.supabase.com
 DB_PORT=5432
-DB_DATABASE=managjeh
-DB_USERNAME=postgres
+DB_DATABASE=postgres
+DB_USERNAME=postgres.<project_ref>
 DB_PASSWORD=your_strong_db_password
+DB_SSLMODE=require
 
 SESSION_DRIVER=database
 SESSION_LIFETIME=120
@@ -138,7 +139,18 @@ php artisan queue:restart
 
 ---
 
-## 5. Continuous Integration (`.github/workflows/tests.yml`)
+## 5. Deployment di Railway + Supabase
+
+Repository ini menyediakan konfigurasi kontainer siap pakai untuk **Railway** + **Supabase PostgreSQL** (`Session Pooler` port `5432`):
+
+- **[Dockerfile](../Dockerfile):** Image `dunglas/frankenphp:php8.5-trixie` lengkap dengan ekstensi PHP PostgreSQL (`pdo_pgsql`, `pgsql`), `intl`, `bcmath`, `pcntl`, Composer `--no-dev`, dan build Vite + Wayfinder (Node.js 22).
+- **[Caddyfile](../Caddyfile):** Konfigurasi FrankenPHP dengan `auto_https off` (di belakang proxy HTTPS Railway) pada `:{$PORT:8080}`.
+- **[docker/start.sh](../docker/start.sh):** Menjalankan `config:cache`, `route:cache`, `view:cache`, `php artisan migrate --force`, worker antrean & scheduler latar belakang, lalu menjalankan server web FrankenPHP.
+- **[bootstrap/app.php](../bootstrap/app.php):** Mengaktifkan `trustProxies(at: '*')` agar skema HTTPS di belakang load balancer Railway terdeteksi dengan benar.
+
+---
+
+## 6. Continuous Integration (`.github/workflows/tests.yml`)
 
 Repository ini dilengkapi workflow GitHub Actions di [.github/workflows/tests.yml](../.github/workflows/tests.yml) yang otomatis berjalan pada setiap `push` dan `pull_request` ke branch `main` / `develop`:
 
