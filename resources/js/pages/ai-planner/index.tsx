@@ -12,6 +12,7 @@ import AiPlannerController from '@/actions/App/Http/Controllers/AiPlannerControl
 import { formatDateDisplay } from '@/components/tasks/task-constants';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { useRateLimitCooldown } from '@/hooks/use-rate-limit-cooldown';
 import { index as aiPlannerIndex } from '@/routes/ai-planner';
 import { index as tasksIndex } from '@/routes/tasks';
 import type {
@@ -44,14 +45,21 @@ export default function AiPlannerIndex({
     const [approvedKeys, setApprovedKeys] = useState<Record<string, boolean>>(
         {},
     );
+    const generateCooldown = useRateLimitCooldown();
 
     const handleGenerate = () => {
+        if (generateCooldown.isCoolingDown) {
+            return;
+        }
+
         setGenerating(true);
         router.post(
             AiPlannerController.generate.url(),
             {},
             {
                 preserveScroll: true,
+                onSuccess: () => generateCooldown.clearRateLimit(),
+                onHttpException: generateCooldown.handleHttpException,
                 onFinish: () => setGenerating(false),
             },
         );
@@ -114,20 +122,35 @@ export default function AiPlannerIndex({
                         </p>
                     </div>
 
-                    <Button
-                        type="button"
-                        disabled={generating}
-                        onClick={handleGenerate}
-                    >
-                        <RefreshCw
-                            className={`size-4 ${generating ? 'animate-spin' : ''}`}
-                        />
-                        {generating
-                            ? 'Menyusun Rencana...'
-                            : latest_run
-                              ? 'Perbarui Rencana Hari Ini'
-                              : 'Generate Rencana Hari Ini'}
-                    </Button>
+                    <div className="flex flex-col items-start gap-1.5 sm:items-end">
+                        <Button
+                            type="button"
+                            disabled={
+                                generating || generateCooldown.isCoolingDown
+                            }
+                            onClick={handleGenerate}
+                        >
+                            <RefreshCw
+                                className={`size-4 ${generating ? 'animate-spin' : ''}`}
+                            />
+                            {generating
+                                ? 'Menyusun Rencana...'
+                                : generateCooldown.isCoolingDown
+                                  ? `Tunggu ${generateCooldown.cooldownSeconds} dtk`
+                                  : latest_run
+                                    ? 'Perbarui Rencana Hari Ini'
+                                    : 'Generate Rencana Hari Ini'}
+                        </Button>
+                        {generateCooldown.rateLimitMessage && (
+                            <p
+                                role="status"
+                                aria-live="polite"
+                                className="text-xs font-medium text-amber-700 tabular-nums dark:text-amber-300"
+                            >
+                                {generateCooldown.rateLimitMessage}
+                            </p>
+                        )}
+                    </div>
                 </div>
 
                 {/* Warnings Banner */}

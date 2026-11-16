@@ -1,4 +1,5 @@
 import { Form, Head, Link, router, useForm, usePage } from '@inertiajs/react';
+import { Download } from 'lucide-react';
 import { useState } from 'react';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import WhatsAppVerificationController from '@/actions/App/Http/Controllers/Settings/WhatsAppVerificationController';
@@ -9,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useRateLimitCooldown } from '@/hooks/use-rate-limit-cooldown';
 import { edit } from '@/routes/profile';
 import { send } from '@/routes/verification';
 import type { Auth } from '@/types';
@@ -33,15 +35,24 @@ export default function Profile({
     const [sendingOtp, setSendingOtp] = useState(false);
     const [otpSent, setOtpSent] = useState(false);
     const otpForm = useForm({ otp: '' });
+    const otpCooldown = useRateLimitCooldown();
 
     const handleSendOtp = () => {
+        if (otpCooldown.isCoolingDown) {
+            return;
+        }
+
         setSendingOtp(true);
         router.post(
             WhatsAppVerificationController.sendOtp.url(),
             {},
             {
                 preserveScroll: true,
-                onSuccess: () => setOtpSent(true),
+                onSuccess: () => {
+                    setOtpSent(true);
+                    otpCooldown.clearRateLimit();
+                },
+                onHttpException: otpCooldown.handleHttpException,
                 onFinish: () => setSendingOtp(false),
             },
         );
@@ -314,16 +325,28 @@ export default function Profile({
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                disabled={sendingOtp}
+                                disabled={sendingOtp || otpCooldown.isCoolingDown}
                                 onClick={handleSendOtp}
                             >
                                 {sendingOtp
                                     ? 'Mengirim...'
-                                    : otpSent
-                                      ? 'Kirim Ulang OTP'
-                                      : 'Kirim Kode OTP'}
+                                    : otpCooldown.isCoolingDown
+                                      ? `Tunggu ${otpCooldown.cooldownSeconds} dtk`
+                                      : otpSent
+                                        ? 'Kirim Ulang OTP'
+                                        : 'Kirim Kode OTP'}
                             </Button>
                         </div>
+
+                        {otpCooldown.rateLimitMessage && (
+                            <p
+                                role="status"
+                                aria-live="polite"
+                                className="text-xs font-medium text-amber-700 tabular-nums dark:text-amber-300"
+                            >
+                                {otpCooldown.rateLimitMessage}
+                            </p>
+                        )}
 
                         <form
                             onSubmit={handleVerifyOtp}
@@ -357,6 +380,48 @@ export default function Profile({
                         </form>
                     </div>
                 )}
+            </div>
+
+            <div className="space-y-4">
+                <Heading
+                    variant="small"
+                    title="Data & Privasi"
+                    description="Unduh salinan data produktivitas Anda dan tinjau kebijakan retensi otomatis"
+                />
+
+                <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0 space-y-1.5">
+                        <p className="text-sm font-medium text-foreground">
+                            Ekspor Data Pribadi (JSON)
+                        </p>
+                        <p className="text-xs leading-relaxed text-muted-foreground">
+                            Mencakup profil non-sensitif, projects, tasks,
+                            calendar events, pengingat, dan riwayat AI Planner
+                            tanpa password, kode OTP, maupun kredensial API.
+                        </p>
+                        <p className="text-xs text-muted-foreground tabular-nums">
+                            Retensi otomatis: item terhapus (soft-deleted) dan
+                            log pengingat/AI berusia lebih dari 30 hari
+                            dibersihkan secara berkala.
+                        </p>
+                    </div>
+
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0"
+                        asChild
+                    >
+                        <a
+                            href={ProfileController.export.url()}
+                            download
+                            data-test="export-user-data-button"
+                        >
+                            <Download className="size-4" />
+                            Unduh Data (JSON)
+                        </a>
+                    </Button>
+                </div>
             </div>
 
             <DeleteUser />
