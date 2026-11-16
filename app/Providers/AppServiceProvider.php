@@ -7,6 +7,7 @@ use App\Services\WhatsApp\FonnteWhatsAppGateway;
 use App\Services\WhatsApp\HttpWhatsAppGateway;
 use App\Services\WhatsApp\NullWhatsAppGateway;
 use Carbon\CarbonImmutable;
+use Closure;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
@@ -82,14 +83,17 @@ class AppServiceProvider extends ServiceProvider
             app()->isProduction(),
         );
 
-        Password::defaults(fn (): ?Password => app()->isProduction()
-            ? Password::min(12)
-                ->mixedCase()
-                ->letters()
-                ->numbers()
-                ->symbols()
-                ->uncompromised()
-            : null,
+        Password::defaults(fn (): Password => Password::min(8)
+            ->max(16)
+            ->mixedCase()
+            ->numbers()
+            ->rules([
+                function (string $attribute, mixed $value, Closure $fail): void {
+                    if (is_string($value) && preg_match('/\s/u', $value) === 1) {
+                        $fail('The :attribute field must not contain spaces.');
+                    }
+                },
+            ]),
         );
     }
 }

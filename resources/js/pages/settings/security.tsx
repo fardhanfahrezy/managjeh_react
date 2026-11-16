@@ -90,6 +90,12 @@ export default function Security(props: Props) {
                                 />
 
                                 <InputError message={errors.password} />
+
+                                <p className="text-xs text-muted-foreground">
+                                    8–16 karakter, wajib mengandung huruf
+                                    kapital, huruf kecil, angka, dan tanpa
+                                    spasi.
+                                </p>
                             </div>
 
                             <div className="grid gap-2">
