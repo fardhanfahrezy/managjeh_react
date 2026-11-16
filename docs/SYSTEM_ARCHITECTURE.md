@@ -1,75 +1,87 @@
 # System Architecture — Managjeh (Personal OS Mahasiswa — MVP 1)
 
-Dokumen ini mendokumentasikan arsitektur sistem **Managjeh MVP 1**, memisahkan antara komponen yang **sudah berjalan (`FACT` — Phase 0 & Phase 1)** dan komponen yang **direncanakan (`REQUIREMENT` — Phase 2 s.d. Phase 7)**.
+Dokumen ini mendokumentasikan arsitektur sistem **Managjeh MVP 1** yang telah diimplementasikan dan terverifikasi penuh (`Implemented & Verified` — Phase 0 s.d. Phase 7).
 
 ---
 
-## 1. Gambaran Umum Arsitektur
+## 1. Gambaran Umum Arsitektur (`FACT`)
 
-- **Monorepo Full-Stack:** Laravel `13.42.0` (PHP `8.5.12`) + Inertia.js v3 (`3.7.0`) + React `19.2.0` + TypeScript + Tailwind CSS v4 + Laravel Wayfinder `0.1.23`.
-- **Database:** PostgreSQL (`managjeh` & `managjeh_test`). Semua timestamp absolut disimpan dalam **UTC**, sedangkan tampilan dan evaluasi jadwal mengikuti `users.timezone` (IANA timezone, default `Asia/Jakarta`).
-- **Model Kepemilikan:** _Single-user sekarang, arsitektur siap multi-user_. Seluruh tabel bisnis memiliki `user_id` dan dilindungi Policy. Registrasi publik dinonaktifkan (`D-01`).
+- **Monolith Full-Stack Modern:** Laravel `13.42.0` (PHP `8.5.12`) + Inertia.js v3 (`3.7.0`) + React `19.2.0` + TypeScript + Tailwind CSS v4 + Laravel Wayfinder `0.1.23`.
+- **Database & Penyimpanan:** PostgreSQL (`managjeh` untuk runtime aplikasi, `managjeh_test` untuk pengujian otomatis). Seluruh timestamp absolut disimpan dalam **UTC** (`CarbonImmutable`), sementara tampilan dan evaluasi jadwal harian mengikuti `users.timezone` (IANA timezone, default `Asia/Jakarta`).
+- **Model Kepemilikan:** _Single-user sekarang, arsitektur siap multi-user_. Seluruh tabel domain memiliki `user_id` dan dilindungi Policy. Registrasi publik dinonaktifkan (`D-01`).
 
 ---
 
-## 2. Diagram Konteks & Komponen Sistem (MVP 1)
+## 2. Diagram Konteks & Komponen Sistem
 
 ```mermaid
 flowchart TB
     User(["Mahasiswa (Pengguna)\nWeb Browser & Penerima Notifikasi WhatsApp"])
 
     subgraph App["Managjeh Application (Laravel 13 + React 19 + Inertia v3)"]
-        subgraph Frontend["React 19 + TypeScript + Tailwind v4"]
-            Pages["8 Halaman MVP:\nDashboard, Tasks, Task Form,\nProjects, Project Detail, Calendar,\nAI Planner, Settings"]
+        subgraph Frontend["React 19 + TypeScript + Tailwind v4 ('The Quiet Desk')"]
+            Pages["Halaman Inertia:\nDashboard, Tasks, Projects, Project Show,\nCalendar, AI Planner, Settings (Profile/Security/Appearance)"]
+            Hooks["Custom Hooks:\nuseRateLimitCooldown, useFlashToast, useAppearance"]
         end
 
-        subgraph HttpLayer["HTTP Layer (Controllers, FormRequests, Policies)"]
-            AuthCtrl["Fortify Auth (Login, 2FA, Passkeys)\nPublic Registration Disabled (D-01)"]
-            DomainCtrl["Domain Controllers:\nProject, Task, CalendarEvent,\nDashboard, AiPlanner, Profile/WhatsApp"]
+        subgraph HttpLayer["HTTP Layer (Controllers, FormRequests, Policies, RateLimiters)"]
+            AuthCtrl["Fortify Auth (Login, 2FA TOTP, Passkeys)\nPublic Registration Disabled (D-01)"]
+            DomainCtrl["Controllers:\nDashboardController, ProjectController, TaskController,\nCalendarEventController, AiPlannerController,\nProfileController, WhatsAppVerificationController"]
         end
 
         subgraph DomainLayer["Domain Services & Models"]
-            CoreModels["Models (Phase 1 Implemented):\nUser, Project, Task\n+ Planned: CalendarEvent, Reminder, AiPlannerRun"]
-            CalSvc["Calendar & RecurrenceExpanderService (D-08)"]
-            RemSvc["ReminderSynchronizer & QuietHoursAdjuster (00:00-05:00, D-05..D-07)"]
-            PlannerSvc["AiPlannerService + Circuit Breaker + Schema Validator (D-03, D-12, D-13)"]
+            Models["Eloquent Models:\nUser, Project, Task, CalendarEvent, Reminder, AiPlannerRun"]
+            CalSvc["Calendar Services:\nRecurrenceExpanderService & ScheduleConflictDetector (D-08)"]
+            RemSvc["Reminder Services:\nReminderSynchronizer & QuietHoursAdjuster (00:00-05:00, D-05..D-07)"]
+            DashSvc["DashboardAggregatorService"]
+            PlannerSvc["AiPlannerService + AiPromptBuilder\n+ Cache Circuit Breaker + JSON Validator (D-03, D-12, D-13)"]
         end
 
         subgraph AsyncLayer["Laravel Scheduler & Queue Worker"]
-            Scheduler["Scheduler:\n- Dispatch due reminders (everyMinute)\n- Auto AI Planner run (D-12)\n- Prune retention data (D-11, D-15)"]
-            Jobs["Queue Jobs:\n- SendWhatsAppMessageJob\n- GenerateAiDailyPlanJob"]
+            Scheduler["Console Commands (routes/console.php):\n- reminders:dispatch-due (everyMinute)\n- ai-planner:generate-daily (dailyAt 05:30)\n- app:prune-retention-data (dailyAt 02:30)"]
+            Jobs["Queue Job:\n- SendWhatsAppMessageJob (tries=3, backoff=15,60,180)"]
         end
     end
 
-    DB[("PostgreSQL 18\n(UTC Timestamps)")]
-    WaGateway["WhatsApp Gateway API\n(via WhatsAppGatewayInterface - D-02)"]
-    Gemini["1. Google Gemini API (Primary - D-03)"]
-    Grok["2. Grok API (Fallback 1 - D-03)"]
-    OpenRouter["3. OpenRouter API (Fallback 2 - D-03)"]
-    RuleFallback["4. Deterministic Rule-Based Planner (Fallback 3 - D-03)"]
+    DB[("PostgreSQL\n(11 Migrations, UTC Timestamps)")]
+    WaGateway["WhatsApp Gateway\n(FonnteWhatsAppGateway / HttpWhatsAppGateway / NullWhatsAppGateway)"]
+    Gemini["1. GeminiPlannerProvider (Primary - D-03)"]
+    Grok["2. GrokPlannerProvider (Fallback 1 - D-03)"]
+    OpenRouter["3. OpenRouterPlannerProvider (Fallback 2 - D-03)"]
+    RuleFallback["4. FallbackPlannerProvider (Deterministic Local - D-03)"]
 
-    User <-->|"HTTPS (Inertia SPA)"| Pages
+    User <-->|"HTTPS (Inertia v3 SPA)"| Pages
+    Pages --> Hooks
     Pages <--> DomainCtrl
     DomainCtrl --> DomainLayer
     DomainLayer --> DB
     Scheduler --> Jobs
+    Scheduler --> PlannerSvc
+    Scheduler --> DB
     Jobs --> RemSvc
-    Jobs --> PlannerSvc
-    RemSvc --> WaGateway
-    WaGateway -->|"Notifikasi Pengingat & OTP (D-14)"| User
+    Jobs --> WaGateway
+    WaGateway -->|"Pengingat & OTP Satu Arah (D-14)"| User
     PlannerSvc --> Gemini
-    PlannerSvc -.->|"Fallback on failure"| Grok
-    PlannerSvc -.->|"Fallback on failure"| OpenRouter
-    PlannerSvc -.->|"Fallback on failure"| RuleFallback
+    PlannerSvc -.->|"Fallback on error/timeout/429"| Grok
+    PlannerSvc -.->|"Fallback on error/timeout/429"| OpenRouter
+    PlannerSvc -.->|"Fallback when all LLMs fail"| RuleFallback
 ```
 
 ---
 
-## 3. Pemisahan Tanggung Jawab Backend
+## 3. Pemisahan Tanggung Jawab Backend (`app/`)
 
-1. **Controller (`app/Http/Controllers/`):** Menerima request, memanggil FormRequest & Policy (`$this->authorize(...)`), memanggil Service/Model, dan mengembalikan response Inertia atau redirect dengan flash toast.
-2. **Form Request (`app/Http/Requests/`):** Menangani validasi input, pemeriksaan kepemilikan relasi (`project_id`, `parent_id`, `task_id`), dan normalisasi timezone input ke UTC.
-3. **Policy (`app/Policies/`):** Memastikan pengguna hanya dapat mengakses dan memodifikasi resource dengan `user_id === $user->id`.
-4. **Service (`app/Services/`):** Menangani logika lintas-model seperti ekspansi agenda berulang (`D-08`), sinkronisasi pengingat & jam tenang (`00:00–05:00` `D-06`), agregasi dashboard, serta orkestrasi fallback AI Planner (`D-03`).
-5. **Job (`app/Jobs/`):** Menjalankan pengiriman WhatsApp dan pemanggilan AI secara asynchronous dengan idempotency, retry terbatas, dan backoff.
-6. **Contract / Provider (`app/Contracts/`):** Mengisolasi vendor WhatsApp (`WhatsAppGatewayInterface`) dan provider AI (`AiPlannerProviderInterface`).
+1. **Controllers (`app/Http/Controllers/`):** Menerima request, menjalankan FormRequest & Policy (`Gate::authorize(...)`), memanggil Service atau Model, dan mengembalikan response Inertia, redirect dengan flash toast, atau unduhan JSON (`ProfileController@export`).
+2. **Form Requests (`app/Http/Requests/`):** Menangani validasi input, pemeriksaan kepemilikan relasi (`project_id`, `parent_id`, `task_id`), dan konversi waktu input lokal (`users.timezone`) ke UTC (`normalizedValidated()`).
+3. **Policies (`app/Policies/`):** `ProjectPolicy`, `TaskPolicy`, dan `CalendarEventPolicy` memastikan pengguna hanya dapat mengakses resource dengan `user_id === $user->id`.
+4. **Services (`app/Services/`):**
+    - `Calendar\RecurrenceExpanderService` & `Calendar\ScheduleConflictDetector`: Mengekspansi kejadian berulang (`DAILY`/`WEEKLY`/`MONTHLY`), menerapkan `recurrence_exceptions` serta _single-occurrence overrides_, dan mendeteksi konflik waktu.
+    - `Reminder\QuietHoursAdjuster` & `Reminder\ReminderSynchronizer`: Menyesuaikan waktu pengingat di luar jam tenang (`00:00–05:00` lokal) dan menyinkronkan reminder otomatis saat tugas/agenda berubah.
+    - `DashboardAggregatorService`: Mengagregasi 8 bagian utama Dashboard secara efisien.
+    - `AiPlanner\AiPlannerService` & `AiPromptBuilder`: Membentuk konteks tersanitasi (`AiPlannerContext`), mengelola _circuit breaker_ cache per provider, menjalankan rantai fallback, memvalidasi output JSON terhadap ID tugas aktif, dan membuat reminder yang disetujui pengguna (`approveReminder()`).
+5. **Contracts & Adapters (`app/Contracts/`, `app/Services/WhatsApp/`, `app/Services/AiPlanner/`):**
+    - `WhatsAppGatewayInterface` → `FonnteWhatsAppGateway`, `HttpWhatsAppGateway`, `NullWhatsAppGateway`.
+    - `AiPlannerProviderInterface` → `GeminiPlannerProvider`, `GrokPlannerProvider`, `OpenRouterPlannerProvider`, `FallbackPlannerProvider`.
+6. **Jobs & Console Commands (`app/Jobs/`, `app/Console/Commands/`):**
+    - `SendWhatsAppMessageJob`: Mengirim pesan WhatsApp secara asynchronous dengan pemeriksaan ulang persetujuan user, keaktifan sumber, dan `idempotency_key`.
+    - `ProvisionUserCommand` (`user:provision`), `DispatchDueRemindersCommand` (`reminders:dispatch-due`), `GenerateDailyAiPlansCommand` (`ai-planner:generate-daily`), dan `PruneRetentionDataCommand` (`app:prune-retention-data`).

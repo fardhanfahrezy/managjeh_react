@@ -1,21 +1,24 @@
 # Frontend Architecture — Managjeh (Personal OS Mahasiswa — MVP 1)
 
-Dokumen ini mendokumentasikan arsitektur frontend **React 19 + Inertia.js v3 + TypeScript + Tailwind CSS v4** untuk **Managjeh MVP 1**, lengkap dengan kontrak TypeScript, daftar 8 halaman MVP, dan panduan **PAGE ARCHITECT** agar AI Coding Agent dapat mengimplementasikan UI Phase 2–6 secara konsisten.
+Dokumen ini mendokumentasikan arsitektur frontend **React 19 + Inertia.js v3 + TypeScript + Tailwind CSS v4** yang telah diimplementasikan (`Implemented & Verified`) untuk **Managjeh MVP 1** di atas sistem desain **"The Quiet Desk"** ([DESIGN.md](../DESIGN.md)).
 
 ---
 
 ## 1. Technology Stack & Konvensi (`FACT`)
 
-- **React:** `^19.2.0` (`babel-plugin-react-compiler` aktif, `strictMode: true`)
-- **Inertia.js v3:** `@inertiajs/react` `^3.0.0`, `@inertiajs/vite` `^3.0.0` (menggunakan `<Form>`, `<Link>`, `router`, dan `useHttp()`; **Axios tidak digunakan**)
-- **Routing TypeScript:** **Laravel Wayfinder** (`0.1.23`) menghasilkan fungsi route/action bertipe di `@/routes/*` dan `@/actions/*`
-- **Styling & Primitives:** Tailwind CSS v4 (`resources/css/app.css`), Radix UI primitives di `resources/js/components/ui/*` (`card`, `button`, `dialog`, `input`, `select`, `badge`, `checkbox`, `sidebar`, `skeleton`, `sonner`, `tooltip`, `tabs`/`toggle-group`), dan Lucide React icons
+- **React:** `^19.2.0` (`babel-plugin-react-compiler` `^1.0.0`, `strictMode: true`).
+- **Inertia.js v3:** `@inertiajs/react` `^3.0.0`, `@inertiajs/vite` `^3.0.0` (menggunakan `<Form>`, `<Link>`, `useForm`, `usePage`, dan `router`; **Axios tidak digunakan**).
+- **Typed Routing (Laravel Wayfinder):** `@laravel/vite-plugin-wayfinder` & `laravel/wayfinder` (`0.1.23`) menghasilkan fungsi route dan controller action bertipe di `resources/js/routes/*` dan `resources/js/actions/*` (termasuk varian `.form()` melalui `php artisan wayfinder:generate --with-form`).
+- **Styling & UI Primitives:** Tailwind CSS v4 ([resources/css/app.css](../resources/css/app.css)), komponen Radix UI di `resources/js/components/ui/*`, ikon `lucide-react`, dan notifikasi toast `sonner`.
+- **Visual System ("The Quiet Desk" — [DESIGN.md](../DESIGN.md)):**
+    - Font tunggal lokal **Inter** (_variable font_) dengan `tabular-nums` pada waktu, tanggal, durasi, dan persentase.
+    - Kanvas hangat _Bright Snow_ (`#fafaf9`), permukaan kartu _Pure White_ (`#ffffff`) berborder `1px` _Hairline Stone_ (`#e7e5e4`), aksen primer _Shamrock Emerald_ (`#059669`), serta _Ochre Amber_ (`#d97706`) / _Crimson Alert_ (`#dc2626`) khusus sinyal status nyata.
 
 ---
 
-## 2. Kontrak TypeScript (`resources/js/types/`)
+## 2. Kontrak TypeScript Aktual (`resources/js/types/`)
 
-### 2.1 Tipe `User` di `resources/js/types/auth.ts` (`Implemented` di Phase 1)
+### 2.1 Tipe `User` di [resources/js/types/auth.ts](../resources/js/types/auth.ts)
 
 ```ts
 export type User = {
@@ -37,146 +40,54 @@ export type User = {
 };
 ```
 
-### 2.2 Tipe Domain MVP 1 (Untuk dibuat di `resources/js/types/models.ts` pada Phase 2–6)
+### 2.2 Tipe Domain di [resources/js/types/models.ts](../resources/js/types/models.ts)
 
 ```ts
 export type ProjectStatus = 'active' | 'completed' | 'archived';
 export type TaskStatus = 'todo' | 'in_progress' | 'completed' | 'cancelled';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
-export type ReminderStatus =
-    | 'pending'
-    | 'processing'
-    | 'sent'
-    | 'failed'
-    | 'cancelled';
+export type CalendarView = 'day' | 'week' | 'month';
 export type AiPlannerRunStatus = 'pending' | 'success' | 'failed';
-
-export type Project = {
-    id: number;
-    user_id: number;
-    name: string;
-    description: string | null;
-    status: ProjectStatus;
-    start_date: string | null; // YYYY-MM-DD
-    due_date: string | null; // YYYY-MM-DD
-    completed_at: string | null;
-    progress: number; // 0 - 100
-    completed_tasks_count?: number;
-    non_cancelled_tasks_count?: number;
-    tasks?: Task[];
-    created_at: string;
-    updated_at: string;
-};
-
-export type Task = {
-    id: number;
-    user_id: number;
-    project_id: number | null;
-    parent_id: number | null;
-    title: string;
-    description: string | null;
-    status: TaskStatus;
-    priority: TaskPriority;
-    due_at: string | null; // ISO UTC
-    due_at_local?: string | null; // Formatted in user's timezone
-    completed_at: string | null;
-    sort_order: number;
-    project?: Pick<Project, 'id' | 'name' | 'status'> | null;
-    subtasks?: Task[];
-    created_at: string;
-    updated_at: string;
-};
-
-export type CalendarEvent = {
-    id: number;
-    user_id: number;
-    project_id: number | null;
-    task_id: number | null;
-    parent_event_id: number | null;
-    recurrence_id: string | null;
-    title: string;
-    description: string | null;
-    starts_at: string | null; // ISO UTC (when is_all_day = false)
-    ends_at: string | null; // ISO UTC (when is_all_day = false)
-    start_date: string | null; // YYYY-MM-DD (when is_all_day = true)
-    end_date: string | null; // YYYY-MM-DD (when is_all_day = true)
-    is_all_day: boolean;
-    is_cancelled: boolean;
-    recurrence_rule: string | null;
-    recurrence_until: string | null;
-    project?: Pick<Project, 'id' | 'name'> | null;
-    task?: Pick<Task, 'id' | 'title' | 'status'> | null;
-};
-
-export type AiPlannerPriorityItem = {
-    task_id: number;
-    task_title?: string;
-    reason: string;
-    suggested_action: string;
-    estimated_minutes: number;
-};
-
-export type AiPlannerWarning = {
-    type: string;
-    message: string;
-};
-
-export type AiPlannerResult = {
-    summary: string;
-    priorities: AiPlannerPriorityItem[];
-    recommended_reminders?: Array<{
-        task_id: number;
-        remind_at_local: string;
-        reason: string;
-    }>;
-    warnings: AiPlannerWarning[];
-};
-
-export type AiPlannerRun = {
-    id: number;
-    planning_date: string;
-    provider: string;
-    model: string | null;
-    status: AiPlannerRunStatus;
-    result: AiPlannerResult | null;
-    error_message: string | null;
-    created_at: string;
-};
 ```
+
+File `resources/js/types/models.ts` mengekspor tipe lengkap yang digunakan lintas halaman:
+
+- `ProjectSummary`, `Project`, `Task`, `TaskOption`
+- `CalendarEvent` (termasuk `series_id`, `occurrence_key`, `is_recurring`, `is_override`, `starts_at_local`, `ends_at_local`, `has_conflict`), `TaskDeadlineItem`, `ConflictWarning`
+- `DashboardData`, `DashboardTaskItem`, `DashboardProjectItem`, `DashboardWhatsAppStatus`, `DashboardCompletedSummary`
+- `AiPlannerRun`, `AiPlannerResult`, `AiPlannerPriorityItem`, `AiPlannerRecommendedReminder`, `AiPlannerWarning`
 
 ---
 
-## 3. Daftar 8 Halaman MVP & Spesifikasi PAGE ARCHITECT
+## 3. Daftar Halaman & Komponen Utama (`Implemented & Verified`)
 
-Setiap halaman wajib menyediakan: **Loading state**, **Empty state**, **Error state**, **Success toast (`sonner`)**, **Validation feedback (`InputError`)**, **Responsive layout**, dan **Keyboard accessibility**.
+Seluruh halaman aplikasi menggunakan layout utama `AppLayout` (sidebar navigasi responsif di kiri + area konten utama dengan wrapper konsisten `flex flex-1 flex-col gap-5 p-4 md:p-6` atau `gap-6`):
 
-| No    | Halaman MVP                        | Path Komponen (`resources/js/pages/`)        | Phase         | Status Aktual (`FACT`)                                                                              |
-| :---- | :--------------------------------- | :------------------------------------------- | :------------ | :-------------------------------------------------------------------------------------------------- |
-| **1** | **Dashboard**                      | `dashboard.tsx` (`/dashboard`)               | Phase 4       | `Partially Implemented` (masih `PlaceholderPattern`)                                                |
-| **2** | **Tasks List**                     | `tasks/index.tsx` (`/tasks`)                 | Phase 2       | `Not Implemented`                                                                                   |
-| **3** | **Task Detail / Form Modal**       | `components/tasks/task-form-dialog.tsx`      | Phase 2       | `Not Implemented`                                                                                   |
-| **4** | **Projects List**                  | `projects/index.tsx` (`/projects`)           | Phase 2       | `Not Implemented`                                                                                   |
-| **5** | **Project Detail**                 | `projects/show.tsx` (`/projects/{project}`)  | Phase 2       | `Not Implemented`                                                                                   |
-| **6** | **Calendar**                       | `calendar/index.tsx` (`/calendar`)           | Phase 3       | `Not Implemented`                                                                                   |
-| **7** | **AI Planner**                     | `ai-planner/index.tsx` (`/ai-planner`)       | Phase 6       | `Not Implemented`                                                                                   |
-| **8** | **Settings (Timezone & WhatsApp)** | `settings/profile.tsx` (`/settings/profile`) | Phase 1–2 & 5 | `Partially Implemented` (Backend siap di Phase 1; input UI ditambahkan di Phase 2 & OTP di Phase 5) |
+| No    | Halaman / Komponen                 | Path File (`resources/js/`)                                                   | Route Name                         | Status Aktual            | Fitur Utama                                                                                                                                                                                                     |
+| :---- | :--------------------------------- | :---------------------------------------------------------------------------- | :--------------------------------- | :----------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1** | **Dashboard**                      | `pages/dashboard.tsx`                                                         | `dashboard`                        | `Implemented & Verified` | 8 kartu ringkasan: sapaan lokal, 3 prioritas AI, tugas hari ini (centang cepat), tenggat terdekat, agenda hari ini, proyek aktif, status WA, metrik selesai.                                                    |
+| **2** | **Tasks List**                     | `pages/tasks/index.tsx`                                                       | `tasks.index`                      | `Implemented & Verified` | Filter status, prioritas, & proyek; daftar tugas dikelompokkan; ekspansi subtugas 1 tingkat (`D-09`); empty state.                                                                                              |
+| **3** | **Task Form & Row Components**     | `components/tasks/task-form-dialog.tsx`, `components/tasks/task-row-item.tsx` | —                                  | `Implemented & Verified` | Dialog buat/edit tugas & pengelolaan subtugas inline; badge prioritas/status & aksi cepat ubah status.                                                                                                          |
+| **4** | **Projects List**                  | `pages/projects/index.tsx`                                                    | `projects.index`                   | `Implemented & Verified` | Filter status proyek, grid kartu proyek dengan progress bar (`0–100%`), dialog buat/edit/hapus proyek.                                                                                                          |
+| **5** | **Project Detail**                 | `pages/projects/show.tsx`                                                     | `projects.show`                    | `Implemented & Verified` | Ringkasan progres proyek, daftar tugas dalam proyek, dan tombol tambah tugas langsung ke proyek tersebut.                                                                                                       |
+| **6** | **Calendar**                       | `pages/calendar/index.tsx`                                                    | `calendar.index`                   | `Implemented & Verified` | Switcher `Day` / `Week` / `Month`, grid jam & _all-day_, indikator deadline tugas, banner konflik jadwal, modal berulang (`D-08`) + dialog pilih scope `single` vs `series`.                                    |
+| **7** | **AI Planner**                     | `pages/ai-planner/index.tsx`                                                  | `ai-planner.index`                 | `Implemented & Verified` | Tombol generate manual (dengan cooldown `429`), 3 kartu prioritas utama, rekomendasi pengingat WA 1-klik (`approveReminder`), banner peringatan, & riwayat run.                                                 |
+| **8** | **Profile, WhatsApp & Privacy**    | `pages/settings/profile.tsx`                                                  | `profile.edit`                     | `Implemented & Verified` | Form profil, timezone IANA, nomor WA, toggle pengingat, jam tenang (`00:00–05:00`), verifikasi OTP WA (dengan cooldown `429`), kartu **Data & Privasi** (ekspor JSON & info retensi 30 hari), serta hapus akun. |
+| **9** | **Security & Appearance Settings** | `pages/settings/security.tsx`, `pages/settings/appearance.tsx`                | `security.edit`, `appearance.edit` | `Implemented & Verified` | Ubah password, kelola 2FA TOTP + recovery codes, WebAuthn Passkeys, dan pilih tema (`light`/`dark`/`system`).                                                                                                   |
 
-### Detail Komponen Per Halaman
+---
 
-1. **Dashboard (`dashboard.tsx` — Phase 4):**
-    - Menampilkan 8 bagian: (1) Greeting & tanggal lokal pengguna, (2) Ringkasan tugas hari ini, (3) Tugas mendekati deadline, (4) Agenda kalender hari ini, (5) Progres proyek aktif, (6) Tiga prioritas AI Planner, (7) Status koneksi WhatsApp, (8) Ringkasan tugas selesai.
-2. **Tasks (`tasks/index.tsx` & `task-form-dialog.tsx` — Phase 2):**
-    - Filter bar berdasarkan `status` (`todo`, `in_progress`, `completed`, `cancelled`), `priority` (`low`, `medium`, `high`, `urgent`), dan `project_id`.
-    - Mendukung aksi cepat ubah status dan tampilan subtugas 1 tingkat (`D-09`).
-3. **Projects (`projects/index.tsx` & `projects/show.tsx` — Phase 2):**
-    - Grid kartu proyek dengan progress bar (`calculateProgress()`), rentang tanggal `start_date`–`due_date`, dan badge status (`active`, `completed`, `archived`).
-    - Halaman detail (`projects/show.tsx`) menampilkan daftar tugas proyek terkait dan tombol tambah tugas ke proyek tersebut.
-4. **Calendar (`calendar/index.tsx` — Phase 3):**
-    - Switcher tampilan `Day`, `Week`, `Month` berdasarkan `auth.user.timezone`.
-    - Menampilkan agenda berjam, agenda _all-day_, kejadian agenda berulang (`D-08`), dan deadline tugas (`tasks.due_at`).
-    - Saat mengedit/menghapus agenda berulang, tampilkan pilihan: **"Hanya kejadian ini"** (`edit_scope = 'single'`) atau **"Seluruh rangkaian"** (`edit_scope = 'series'`).
-5. **AI Planner (`ai-planner/index.tsx` — Phase 6):**
-    - Menampilkan rencana hari ini (`summary`, maksimal 3 `priorities` beserta `reason`, `suggested_action`, `estimated_minutes`, dan `warnings`).
-    - Tombol **"Generate / Perbarui Rencana Hari Ini"** serta badge provider yang digunakan (`gemini`, `grok`, `openrouter`, atau `fallback`).
-6. **Settings Timezone & WhatsApp (`settings/profile.tsx` — Phase 2 & Phase 5):**
-    - Pilih IANA `timezone`, input `whatsapp_number`, toggle `whatsapp_enabled`, input `reminder_quiet_start` (`00:00`) & `reminder_quiet_end` (`05:00`), serta alur kirim & verifikasi OTP WhatsApp (`D-14`).
+## 4. Custom Hooks (`resources/js/hooks/`)
+
+- [use-rate-limit-cooldown.ts](../resources/js/hooks/use-rate-limit-cooldown.ts) — Menangani respons HTTP `429 Too Many Requests` melalui callback `onHttpException` Inertia v3, membaca header `Retry-After`, menonaktifkan tombol sementara, dan menyediakan pesan hitung mundur (`role="status" aria-live="polite"`).
+- [use-flash-toast.ts](../resources/js/hooks/use-flash-toast.ts) — Menampilkan notifikasi toast `sonner` secara otomatis dari flash data Inertia (`toast.success` / `toast.error`).
+- [use-appearance.tsx](../resources/js/hooks/use-appearance.tsx) — Mengelola preferensi mode terang/gelap/sistem.
+- [use-mobile.tsx](../resources/js/hooks/use-mobile.tsx) & [use-mobile-navigation.ts](../resources/js/hooks/use-mobile-navigation.ts) — Responsivitas sidebar dan drawer navigasi mobile.
+
+---
+
+## 5. Aksesibilitas & Responsivitas
+
+1. **Keyboard & Screen Reader:** Semua kontrol interaktif menggunakan primitif Radix UI dengan cincin fokus `focus-visible` `3px`; seluruh tombol ikon (`size="icon"`) memiliki `aria-label` kontekstual (mis. `Edit project ...`, `Hapus tugas ...`, `Periode sebelumnya`); pesan status/cooldown menggunakan `role="status"` dan `aria-live="polite"`.
+2. **Tabular Numerals:** Seluruh tampilan angka waktu, tanggal, persentase progres, kode OTP, dan durasi menggunakan utilitas `tabular-nums`.
+3. **Mobile-First Layout:** Header halaman, filter bar, dan kartu beradaptasi dari layar ponsel (`375px`) hingga desktop lebar menggunakan kombinasi `flex-col sm:flex-row`, `min-w-0`, dan drawer `Sheet` pada navigasi mobile.

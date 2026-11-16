@@ -1,78 +1,94 @@
 # API & External Service Integration — Managjeh (Personal OS Mahasiswa — MVP 1)
 
-Dokumen ini mendokumentasikan route internal Inertia serta spesifikasi kontrak integrasi eksternal untuk **WhatsApp Gateway (`D-02`, `D-14`)** dan **AI Planner Multi-Provider (`D-03`, `D-04`, `D-12`, `D-13`)**.
+Dokumen ini mendokumentasikan seluruh route aplikasi yang aktif (`Implemented & Verified`) di [routes/web.php](../routes/web.php) dan [routes/settings.php](../routes/settings.php), serta kontrak integrasi untuk **WhatsApp Gateway (`D-02`, `D-14`)** dan **AI Planner Multi-Provider (`D-03`, `D-04`, `D-12`, `D-13`)**.
 
 ---
 
-## 1. Route Internal Aktual & Target (`routes/web.php` & `routes/settings.php`)
+## 1. Daftar Route Aplikasi Aktual (`php artisan route:list --except-vendor`)
 
-| Kelompok Route             | Method & URI                                                                                                                      | Middleware                                              | Status Saat Ini (`FACT`)                                                                                                                            |
-| :------------------------- | :-------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------ | :-------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Auth (Fortify)**         | `/login`, `/logout`, `/forgot-password`, `/reset-password/*`, `/email/verify*`, `/two-factor-challenge`, `/passkeys/*`            | `web`, `guest`/`auth`, `throttle:*`                     | `Implemented` (Registrasi publik `/register` **dinonaktifkan** sesuai `D-01`)                                                                       |
-| **Settings**               | `GET/PATCH/DELETE /settings/profile`, `GET /settings/security`, `PUT /settings/password`, `GET /settings/appearance`              | `web`, `auth`, `verified`                               | `Implemented` (`ProfileController` sudah mendukung `timezone`, `whatsapp_number`, `whatsapp_enabled`, `reminder_quiet_start`, `reminder_quiet_end`) |
-| **Dashboard**              | `GET /dashboard` (`dashboard`)                                                                                                    | `web`, `auth`, `verified`                               | `Partially Implemented` (Agregasi data di Phase 4)                                                                                                  |
-| **Projects**               | `GET /projects`, `POST /projects`, `GET /projects/{project}`, `PUT/PATCH /projects/{project}`, `DELETE /projects/{project}`       | `web`, `auth`, `verified`                               | `Planned` (Phase 2 — Model/Policy/FormRequest sudah ada di Phase 1)                                                                                 |
-| **Tasks**                  | `GET /tasks`, `POST /tasks`, `PUT/PATCH /tasks/{task}`, `DELETE /tasks/{task}`                                                    | `web`, `auth`, `verified`                               | `Planned` (Phase 2 — Model/Policy/FormRequest sudah ada di Phase 1)                                                                                 |
-| **Calendar**               | `GET /calendar`, `POST /calendar-events`, `PUT/PATCH /calendar-events/{calendarEvent}`, `DELETE /calendar-events/{calendarEvent}` | `web`, `auth`, `verified`                               | `Planned` (Phase 3)                                                                                                                                 |
-| **WhatsApp OTP & Webhook** | `POST /settings/whatsapp/send-otp`, `POST /settings/whatsapp/verify-otp`, `POST /webhooks/whatsapp/status`                        | `auth`/`verified` (OTP), Signature middleware (Webhook) | `Planned` (Phase 5)                                                                                                                                 |
-| **AI Planner**             | `GET /ai-planner`, `POST /ai-planner/generate`                                                                                    | `web`, `auth`, `verified`, `throttle:ai-planner`        | `Planned` (Phase 6)                                                                                                                                 |
+Seluruh route di bawah ini telah diimplementasikan dan terverifikasi:
+
+| Method       | URI                                 | Route Name                    | Controller / Action                                 | Middleware                                        | Tujuan                                                                  |
+| :----------- | :---------------------------------- | :---------------------------- | :-------------------------------------------------- | :------------------------------------------------ | :---------------------------------------------------------------------- |
+| `GET\|HEAD`  | `/`                                 | `home`                        | `Inertia\Controller` (`welcome`)                    | `web`                                             | Halaman sambutan publik                                                 |
+| `GET\|HEAD`  | `/dashboard`                        | `dashboard`                   | `DashboardController@__invoke`                      | `web`, `auth`, `verified`                         | Halaman Dashboard terpadu (8 bagian ringkasan)                          |
+| `GET\|HEAD`  | `/projects`                         | `projects.index`              | `ProjectController@index`                           | `web`, `auth`, `verified`                         | Daftar proyek milik pengguna beserta progres                            |
+| `POST`       | `/projects`                         | `projects.store`              | `ProjectController@store`                           | `web`, `auth`, `verified`                         | Membuat proyek baru (`StoreProjectRequest`)                             |
+| `GET\|HEAD`  | `/projects/{project}`               | `projects.show`               | `ProjectController@show`                            | `web`, `auth`, `verified` (`ProjectPolicy`)       | Detail proyek dan daftar tugas terkait                                  |
+| `PUT\|PATCH` | `/projects/{project}`               | `projects.update`             | `ProjectController@update`                          | `web`, `auth`, `verified` (`ProjectPolicy`)       | Memperbarui proyek (`UpdateProjectRequest`)                             |
+| `DELETE`     | `/projects/{project}`               | `projects.destroy`            | `ProjectController@destroy`                         | `web`, `auth`, `verified` (`ProjectPolicy`)       | Soft delete proyek (`D-11`)                                             |
+| `GET\|HEAD`  | `/tasks`                            | `tasks.index`                 | `TaskController@index`                              | `web`, `auth`, `verified`                         | Daftar tugas & subtugas dengan filter status/prioritas/proyek           |
+| `POST`       | `/tasks`                            | `tasks.store`                 | `TaskController@store`                              | `web`, `auth`, `verified`                         | Membuat tugas/subtugas & sinkronisasi pengingat (`StoreTaskRequest`)    |
+| `PUT\|PATCH` | `/tasks/{task}`                     | `tasks.update`                | `TaskController@update`                             | `web`, `auth`, `verified` (`TaskPolicy`)          | Memperbarui tugas/status & sinkronisasi pengingat (`UpdateTaskRequest`) |
+| `DELETE`     | `/tasks/{task}`                     | `tasks.destroy`               | `TaskController@destroy`                            | `web`, `auth`, `verified` (`TaskPolicy`)          | Soft delete tugas & batalkan pengingat `pending` (`D-11`)               |
+| `GET\|HEAD`  | `/calendar`                         | `calendar.index`              | `CalendarEventController@index`                     | `web`, `auth`, `verified`                         | Tampilan kalender (`day`/`week`/`month`) + ekspansi agenda berulang     |
+| `POST`       | `/calendar-events`                  | `calendar-events.store`       | `CalendarEventController@store`                     | `web`, `auth`, `verified`                         | Membuat agenda baru (`StoreCalendarEventRequest`)                       |
+| `PUT\|PATCH` | `/calendar-events/{calendar_event}` | `calendar-events.update`      | `CalendarEventController@update`                    | `web`, `auth`, `verified` (`CalendarEventPolicy`) | Memperbarui 1 kejadian (`single`) atau seluruh rangkaian (`series`)     |
+| `DELETE`     | `/calendar-events/{calendar_event}` | `calendar-events.destroy`     | `CalendarEventController@destroy`                   | `web`, `auth`, `verified` (`CalendarEventPolicy`) | Menghapus 1 kejadian (`single`) atau seluruh rangkaian (`series`)       |
+| `GET\|HEAD`  | `/ai-planner`                       | `ai-planner.index`            | `AiPlannerController@index`                         | `web`, `auth`, `verified`                         | Menampilkan rencana prioritas harian AI & riwayat eksekusi              |
+| `POST`       | `/ai-planner/generate`              | `ai-planner.generate`         | `AiPlannerController@generate`                      | `web`, `auth`, `verified`, `throttle:ai-planner`  | Memicu pembuatan rencana AI harian (maks. 10x/menit)                    |
+| `POST`       | `/ai-planner/reminders/approve`     | `ai-planner.approve-reminder` | `AiPlannerController@approveReminder`               | `web`, `auth`, `verified`                         | Menyetujui rekomendasi pengingat AI menjadi entri `reminders` (`D-12`)  |
+| `ANY`        | `/settings`                         | —                             | Redirect ke `/settings/profile`                     | `web`, `auth`                                     | Redirect halaman pengaturan utama                                       |
+| `GET\|HEAD`  | `/settings/profile`                 | `profile.edit`                | `Settings\ProfileController@edit`                   | `web`, `auth`                                     | Halaman pengaturan profil, timezone, WhatsApp, quiet hours, & privasi   |
+| `PATCH`      | `/settings/profile`                 | `profile.update`              | `Settings\ProfileController@update`                 | `web`, `auth`                                     | Memperbarui profil, timezone, nomor WA, & jam tenang                    |
+| `GET\|HEAD`  | `/settings/profile/export`          | `profile.export`              | `Settings\ProfileController@export`                 | `web`, `auth`, `verified`, `throttle:data-export` | Mengunduh arsip JSON data pribadi pengguna (maks. 5x/menit, `D-15`)     |
+| `DELETE`     | `/settings/profile`                 | `profile.destroy`             | `Settings\ProfileController@destroy`                | `web`, `auth`, `verified`                         | Menghapus akun pengguna dengan konfirmasi password                      |
+| `POST`       | `/settings/whatsapp/send-otp`       | `whatsapp.send-otp`           | `Settings\WhatsAppVerificationController@sendOtp`   | `web`, `auth`, `throttle:whatsapp-otp`            | Mengirim OTP 6 digit ke nomor WhatsApp pengguna (maks. 5x/menit)        |
+| `POST`       | `/settings/whatsapp/verify-otp`     | `whatsapp.verify-otp`         | `Settings\WhatsAppVerificationController@verifyOtp` | `web`, `auth`, `throttle:10,1`                    | Memverifikasi kode OTP WhatsApp (`D-14`)                                |
+| `GET\|HEAD`  | `/settings/security`                | `security.edit`               | `Settings\SecurityController@edit`                  | `web`, `auth`, `verified`, `RequirePassword`      | Pengaturan password, 2FA TOTP, dan WebAuthn Passkeys                    |
+| `PUT`        | `/settings/password`                | `user-password.update`        | `Settings\SecurityController@update`                | `web`, `auth`, `verified`, `throttle:6,1`         | Mengubah password pengguna                                              |
+| `GET\|HEAD`  | `/settings/appearance`              | `appearance.edit`             | `Inertia\Controller` (`settings/appearance`)        | `web`, `auth`, `verified`                         | Pengaturan tema tampilan (`light`, `dark`, `system`)                    |
+| `GET\|HEAD`  | `/.well-known/passkey-endpoints`    | `well-known.passkeys`         | Closure (`routes/settings.php`)                     | `web`                                             | Endpoint discovery standar untuk pengelola Passkey                      |
+
+> **Route Autentikasi Fortify & Passkeys (Vendor):** `/login`, `/logout`, `/forgot-password`, `/reset-password/{token}`, `/email/verify/*`, `/user/confirm-password`, `/two-factor-challenge`, `/user/two-factor-*`, dan `/passkeys/*`. Route `/register` **dinonaktifkan** sesuai `D-01`.
 
 ---
 
-## 2. Kontrak Integrasi WhatsApp Gateway (`D-02`, `D-05`, `D-06`, `D-14` — Phase 5)
+## 2. Kontrak Integrasi WhatsApp Gateway (`D-02`, `D-05`, `D-06`, `D-14`)
 
-### 2.1 Prinsip & Adapter Pattern (`D-02`)
-
-- WhatsApp pada MVP 1 adalah **kanal pengiriman notifikasi satu arah** (dan pengiriman kode verifikasi OTP nomor pengguna).
-- Business logic **dilarang** memanggil endpoint vendor WhatsApp secara langsung; wajib melalui `App\Contracts\WhatsAppGatewayInterface`:
+### 2.1 Interface & DTO (`app/Contracts/WhatsAppGatewayInterface.php`)
 
 ```php
 <?php
 
 namespace App\Contracts;
 
-use App\DataTransferObjects\WhatsAppSendResult;
+use App\Services\WhatsApp\WhatsAppSendResult;
 
 interface WhatsAppGatewayInterface
 {
-    public function sendMessage(
-        string $phoneNumber,
-        string $message,
-        string $idempotencyKey,
-    ): WhatsAppSendResult;
+    public function sendMessage(string $phoneNumber, string $message, string $idempotencyKey): WhatsAppSendResult;
 
-    public function sendVerificationOtp(
-        string $phoneNumber,
-        string $otpCode,
-    ): WhatsAppSendResult;
+    public function sendVerificationOtp(string $phoneNumber, string $otpCode): WhatsAppSendResult;
 }
 ```
 
-### 2.2 Aturan Pengiriman & Webhook Status
+### 2.2 Driver yang Tersedia (`app/Services/WhatsApp/`)
 
-- **Cek Persetujuan & Verifikasi (`D-14`):** `SendWhatsAppMessageJob` wajib memeriksa `$user->canReceiveWhatsAppReminders()` sebelum memanggil `WhatsAppGatewayInterface::sendMessage()`.
-- **Delivery Webhook (Opsional sesuai vendor):** Jika vendor mengirimkan status pengiriman (`delivered`/`failed`), endpoint `POST /webhooks/whatsapp/status` memvalidasi signature/secret header dengan `hash_equals()`, memeriksa `provider_message_id`, dan memperbarui status di tabel `reminders` secara idempotent. **Jangan menerima perintah perubahan data tugas/agenda melalui webhook WhatsApp pada MVP 1.**
+Diikat di [AppServiceProvider.php](../app/Providers/AppServiceProvider.php) berdasarkan `config('services.whatsapp.driver')`:
+
+1. **`fonnte` ([FonnteWhatsAppGateway.php](../app/Services/WhatsApp/FonnteWhatsAppGateway.php)):**
+    - Mengirim HTTP form POST (`asForm()`) ke `https://api.fonnte.com/send` dengan header `Authorization: <FONNTE_TOKEN>` (tanpa prefix `Bearer`), parameter `target` (nomor tanpa tanda `+`), `message`, dan `countryCode: '0'`.
+    - Aktif secara otomatis apabila `WHATSAPP_DRIVER=fonnte` atau apabila `FONNTE_TOKEN` terisi di `.env`.
+2. **`http` ([HttpWhatsAppGateway.php](../app/Services/WhatsApp/HttpWhatsAppGateway.php)):**
+    - Mengirim HTTP JSON POST dengan Bearer token (`WHATSAPP_API_TOKEN`) dan header `Idempotency-Key` ke `WHATSAPP_API_ENDPOINT`.
+3. **`null` ([NullWhatsAppGateway.php](../app/Services/WhatsApp/NullWhatsAppGateway.php)):**
+    - Mengembalikan `WhatsAppSendResult::ok('null-...')` tanpa request keluar. Digunakan pada pengujian otomatis (`phpunit.xml`).
 
 ---
 
-## 3. Kontrak Integrasi AI Planner Multi-Provider (`D-03`, `D-04`, `D-12`, `D-13` — Phase 6)
+## 3. Kontrak Integrasi AI Planner Multi-Provider (`D-03`, `D-04`, `D-12`, `D-13`)
 
-### 3.1 Urutan Provider (`D-03`)
-
-1. **`GeminiPlannerProvider`** (Provider utama — Google Gemini REST API)
-2. **`GrokPlannerProvider`** (Fallback 1 — xAI Grok / OpenAI-compatible API)
-3. **`OpenRouterPlannerProvider`** (Fallback 2 — OpenRouter OpenAI-compatible API)
-4. **`FallbackPlannerProvider`** (Fallback 3 terakhir — algoritma deterministik lokal tanpa HTTP request)
-
-### 3.2 Interface Provider (`App\Contracts\AiPlannerProviderInterface`)
+### 3.1 Interface & DTO (`app/Contracts/AiPlannerProviderInterface.php`)
 
 ```php
 <?php
 
 namespace App\Contracts;
 
-use App\DataTransferObjects\AiPlannerContext;
-use App\DataTransferObjects\AiPlannerProviderResponse;
+use App\Exceptions\AiProviderException;
+use App\Services\AiPlanner\AiPlannerContext;
+use App\Services\AiPlanner\AiPlannerProviderResponse;
 
 interface AiPlannerProviderInterface
 {
@@ -81,66 +97,78 @@ interface AiPlannerProviderInterface
     public function model(): ?string;
 
     /**
-     * @throws \App\Exceptions\AiProviderException
+     * @throws AiProviderException
      */
     public function generatePlan(AiPlannerContext $context): AiPlannerProviderResponse;
 }
 ```
 
-### 3.3 Kontrak Output JSON AI Planner
+### 3.2 Urutan Provider (`app/Services/AiPlanner/`)
 
-Setiap provider AI wajib diinstruksikan menghasilkan JSON dengan struktur berikut, dan wajib divalidasi oleh backend sebelum disimpan ke `ai_planner_runs.result`:
+1. **`GeminiPlannerProvider`** (`provider = 'gemini'`): Memanggil Google Gemini REST API (`generateContent` dengan `responseMimeType: 'application/json'`).
+2. **`GrokPlannerProvider`** (`provider = 'grok'`, turunan `OpenAiCompatiblePlannerProvider`): Memanggil endpoint OpenAI-compatible xAI (`https://api.x.ai/v1/chat/completions`).
+3. **`OpenRouterPlannerProvider`** (`provider = 'openrouter'`, turunan `OpenAiCompatiblePlannerProvider`): Memanggil endpoint OpenRouter (`https://openrouter.ai/api/v1/chat/completions`).
+4. **`FallbackPlannerProvider`** (`provider = 'fallback'`, `model = 'rule-based-v1'`): Algoritma deterministik lokal berbasis skor prioritas tugas, kedekatan deadline, dan slot kosong kalender.
+
+### 3.3 Skema Output JSON Tervalidasi (`ai_planner_runs.result`)
 
 ```json
 {
-    "summary": "Ringkasan singkat kondisi hari ini.",
+    "summary": "Ringkasan singkat rencana hari ini.",
     "priorities": [
         {
-            "task_id": 123,
-            "reason": "Deadline paling dekat.",
-            "suggested_action": "Selesaikan bagian pertama tugas.",
-            "estimated_minutes": 45
+            "task_id": 12,
+            "task_title": "Laporan Praktikum Metode Numerik",
+            "reason": "Tenggat hari ini dengan prioritas tinggi.",
+            "suggested_action": "Kerjakan pada slot kosong 09:00 - 10:30.",
+            "estimated_minutes": 60
         }
     ],
     "recommended_reminders": [
         {
-            "task_id": 123,
-            "remind_at_local": "2026-11-16 09:00:00",
-            "reason": "Awal slot kosong pagi hari."
+            "task_id": 12,
+            "task_title": "Laporan Praktikum Metode Numerik",
+            "remind_at_local": "2026-11-16 08:45:00",
+            "reason": "15 menit sebelum sesi fokus pagi."
         }
     ],
     "warnings": [
         {
             "type": "schedule_conflict",
-            "message": "Ada dua agenda yang waktunya berdekatan."
+            "message": "Terdapat 2 agenda yang saling beririsan hari ini."
         }
     ]
 }
 ```
 
-### 3.4 Konfigurasi `.env` & `config/services.php` (`D-04`)
+---
 
-Seluruh kredensial dan nama model dikonfigurasi melalui `.env` (jangan pernah di-hardcode di kode):
+## 4. Variabel Konfigurasi di `.env` & `config/services.php` (`D-04`)
+
+Seluruh nama variabel di bawah ini sesuai dengan [config/services.php](../config/services.php) dan [.env.example](../.env.example):
 
 ```dotenv
-# WhatsApp Gateway (Phase 5 - D-02)
-WHATSAPP_DRIVER=null
-WHATSAPP_BASE_URL=
-WHATSAPP_API_TOKEN=
-WHATSAPP_WEBHOOK_SECRET=
-
-# AI Planner Providers (Phase 6 - D-03 & D-04)
+# AI Planner Providers
 GEMINI_API_KEY=
-GEMINI_MODEL=gemini-2.5-flash
-GEMINI_TIMEOUT=15
+GEMINI_MODEL=gemini-flash-latest
+GEMINI_ENDPOINT=https://generativelanguage.googleapis.com/v1beta
 
-GROK_API_KEY=
-GROK_BASE_URL=https://api.x.ai/v1
+XAI_API_KEY=
+# Alternatif alias yang juga didukung config/services.php: GROK_API_KEY
 GROK_MODEL=grok-3-mini
-GROK_TIMEOUT=15
+GROK_ENDPOINT=https://api.x.ai/v1/chat/completions
 
 OPENROUTER_API_KEY=
-OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-OPENROUTER_MODEL=google/gemini-2.0-flash-exp:free
-OPENROUTER_TIMEOUT=15
+OPENROUTER_MODEL=google/gemini-3.8-flash
+OPENROUTER_ENDPOINT=https://openrouter.ai/api/v1/chat/completions
+
+AI_PLANNER_TIMEOUT=20
+
+# WhatsApp Gateway
+WHATSAPP_DRIVER=fonnte
+FONNTE_TOKEN=
+FONNTE_API_ENDPOINT=https://api.fonnte.com/send
+WHATSAPP_API_ENDPOINT=
+WHATSAPP_API_TOKEN=
+WHATSAPP_TIMEOUT=10
 ```

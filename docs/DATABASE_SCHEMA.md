@@ -1,10 +1,8 @@
 # Database Schema — Managjeh (Personal OS Mahasiswa — MVP 1)
 
-Dokumen ini merupakan referensi skema database **PostgreSQL** (`managjeh` & `managjeh_test`).
-Seluruh nama tabel dan kolom **wajib menggunakan Bahasa Inggris dan `snake_case`**.
+Dokumen ini mendokumentasikan skema database **PostgreSQL** (`managjeh` & `managjeh_test`) yang **telah diimplementasikan dan terverifikasi penuh (`Implemented & Verified`)** melalui **11 file migrasi aktif** di `database/migrations/`.
 
-- **Section 1 & 2:** Tabel yang **sudah diimplementasikan (`FACT` — Phase 0 & Phase 1)**.
-- **Section 3:** Spesifikasi tabel yang **akan diimplementasikan pada Phase 3, Phase 5, dan Phase 6 (`REQUIREMENT` — siap salin untuk AI Agent)**.
+Seluruh nama tabel dan kolom menggunakan **Bahasa Inggris `snake_case`**.
 
 ---
 
@@ -12,53 +10,60 @@ Seluruh nama tabel dan kolom **wajib menggunakan Bahasa Inggris dan `snake_case`
 
 - **Engine:** PostgreSQL (`DB_CONNECTION=pgsql`)
 - **Database Aplikasi:** `managjeh`
-- **Database Testing (`phpunit.xml`):** `managjeh_test`
+- **Database Testing ([phpunit.xml](../phpunit.xml)):** `managjeh_test`
 - **Penyimpanan Waktu:**
-    - `config('app.timezone') === 'UTC'` dan `Date::use(CarbonImmutable::class)` aktif di `AppServiceProvider`.
-    - Semua kolom `timestamp` (`due_at`, `completed_at`, `starts_at`, `ends_at`, `scheduled_at`, `sent_at`, `failed_at`, `whatsapp_verified_at`, `created_at`, `updated_at`, `deleted_at`) disimpan dalam **UTC**.
-    - Semua kolom `date` (`start_date`, `due_date`, `end_date`, `planning_date`) disimpan sebagai tanggal kalender lokal pengguna (`Y-m-d`).
+    - `config('app.timezone') === 'UTC'` dan `Date::use(CarbonImmutable::class)` aktif di [AppServiceProvider.php](../app/Providers/AppServiceProvider.php).
+    - Semua kolom `timestamp` (`due_at`, `completed_at`, `starts_at`, `ends_at`, `scheduled_at`, `sent_at`, `failed_at`, `whatsapp_verified_at`, `email_verified_at`, `two_factor_confirmed_at`, `created_at`, `updated_at`, `deleted_at`) disimpan dalam **UTC**.
+    - Semua kolom `date` (`start_date`, `due_date`, `end_date`, `recurrence_until`, `planning_date`) disimpan sebagai tanggal kalender lokal pengguna (`Y-m-d`).
     - Semua kolom `time` (`reminder_quiet_start`, `reminder_quiet_end`) merepresentasikan jam lokal dalam zona waktu `users.timezone`.
 
 ---
 
-## 2. Skema Aktual yang Sudah Diimplementasikan (`FACT` — Phase 0 & Phase 1)
+## 2. Daftar 11 Migrasi Aktif (`database/migrations/`)
 
-Saat ini terdapat **8 file migrasi** di `database/migrations/`:
+1. `0001_01_01_000000_create_users_table.php` — Membuat tabel `users`, `password_reset_tokens`, dan `sessions`.
+2. `0001_01_01_000001_create_cache_table.php` — Membuat tabel `cache` dan `cache_locks` (digunakan juga untuk OTP hash WhatsApp, rate limiter, dan circuit breaker AI).
+3. `0001_01_01_000002_create_jobs_table.php` — Membuat tabel `jobs`, `job_batches`, dan `failed_jobs` (digunakan oleh `SendWhatsAppMessageJob`).
+4. `2024_01_01_000000_create_passkeys_table.php` — Membuat tabel `passkeys` untuk autentikasi WebAuthn.
+5. `2025_08_14_170933_add_two_factor_columns_to_users_table.php` — Menambahkan kolom 2FA TOTP ke `users`.
+6. `2026_11_15_000001_add_preferences_to_users_table.php` — Menambahkan kolom `timezone`, `whatsapp_number`, `whatsapp_verified_at`, `whatsapp_enabled`, `reminder_quiet_start`, dan `reminder_quiet_end` ke `users`.
+7. `2026_11_15_000002_create_projects_table.php` — Membuat tabel `projects`.
+8. `2026_11_15_000003_create_tasks_table.php` — Membuat tabel `tasks`.
+9. `2026_11_15_000004_create_calendar_events_table.php` — Membuat tabel `calendar_events`.
+10. `2026_11_15_000005_create_reminders_table.php` — Membuat tabel `reminders`.
+11. `2026_11_15_000006_create_ai_planner_runs_table.php` — Membuat tabel `ai_planner_runs`.
 
-1. `0001_01_01_000000_create_users_table.php` (`users`, `password_reset_tokens`, `sessions`)
-2. `0001_01_01_000001_create_cache_table.php` (`cache`, `cache_locks`)
-3. `0001_01_01_000002_create_jobs_table.php` (`jobs`, `job_batches`, `failed_jobs`)
-4. `2024_01_01_000000_create_passkeys_table.php` (`passkeys`)
-5. `2025_08_14_170933_add_two_factor_columns_to_users_table.php` (kolom 2FA di `users`)
-6. `2026_11_15_000001_add_preferences_to_users_table.php` (preferensi timezone, WA, quiet hours di `users`)
-7. `2026_11_15_000002_create_projects_table.php` (`projects`)
-8. `2026_11_15_000003_create_tasks_table.php` (`tasks`)
+---
 
-### 2.1 Tabel `users` (`Implemented`)
+## 3. Spesifikasi Tabel Domain (`Implemented & Verified`)
+
+### 3.1 Tabel `users`
 
 Model: [app/Models/User.php](../app/Models/User.php)
 
-| Kolom                       | Tipe PostgreSQL         | Nullable | Default          | Keterangan                                           |
-| :-------------------------- | :---------------------- | :------- | :--------------- | :--------------------------------------------------- |
-| `id`                        | `bigint` (PK)           | Tidak    | Auto             | ID pengguna                                          |
-| `name`                      | `varchar(255)`          | Tidak    | —                | Nama lengkap                                         |
-| `email`                     | `varchar(255)` (UNIQUE) | Tidak    | —                | Email login (disimpan huruf kecil)                   |
-| `email_verified_at`         | `timestamp`             | Ya       | `null`           | Waktu verifikasi email (UTC)                         |
-| `password`                  | `varchar(255)`          | Tidak    | —                | Hash bcrypt password                                 |
-| `two_factor_secret`         | `text`                  | Ya       | `null`           | Secret TOTP 2FA terenkripsi                          |
-| `two_factor_recovery_codes` | `text`                  | Ya       | `null`           | Recovery codes 2FA terenkripsi                       |
-| `two_factor_confirmed_at`   | `timestamp`             | Ya       | `null`           | Waktu aktivasi 2FA                                   |
-| `remember_token`            | `varchar(100)`          | Ya       | `null`           | Token sesi remember me                               |
-| `timezone`                  | `varchar(64)`           | Tidak    | `'Asia/Jakarta'` | IANA timezone pengguna                               |
-| `whatsapp_number`           | `varchar(32)` (INDEX)   | Ya       | `null`           | Nomor WA format internasional (mis. `6281234567890`) |
-| `whatsapp_verified_at`      | `timestamp`             | Ya       | `null`           | Waktu nomor WA terverifikasi (`D-14`)                |
-| `whatsapp_enabled`          | `boolean`               | Tidak    | `false`          | Persetujuan pengiriman pengingat WA                  |
-| `reminder_quiet_start`      | `time`                  | Ya       | `'00:00:00'`     | Awal jam tenang lokal (`D-06`)                       |
-| `reminder_quiet_end`        | `time`                  | Ya       | `'05:00:00'`     | Akhir jam tenang lokal (`D-06`)                      |
-| `created_at`                | `timestamp`             | Ya       | `null`           | UTC                                                  |
-| `updated_at`                | `timestamp`             | Ya       | `null`           | UTC                                                  |
+| Kolom                       | Tipe PostgreSQL         | Nullable | Default          | Keterangan                                            |
+| :-------------------------- | :---------------------- | :------- | :--------------- | :---------------------------------------------------- |
+| `id`                        | `bigint` (PK)           | Tidak    | Auto             | ID pengguna                                           |
+| `name`                      | `varchar(255)`          | Tidak    | —                | Nama lengkap                                          |
+| `email`                     | `varchar(255)` (UNIQUE) | Tidak    | —                | Email login (disimpan huruf kecil)                    |
+| `email_verified_at`         | `timestamp`             | Ya       | `null`           | Waktu verifikasi email (UTC)                          |
+| `password`                  | `varchar(255)`          | Tidak    | —                | Hash bcrypt password                                  |
+| `two_factor_secret`         | `text`                  | Ya       | `null`           | Secret TOTP 2FA terenkripsi                           |
+| `two_factor_recovery_codes` | `text`                  | Ya       | `null`           | Recovery codes 2FA terenkripsi                        |
+| `two_factor_confirmed_at`   | `timestamp`             | Ya       | `null`           | Waktu aktivasi 2FA (UTC)                              |
+| `remember_token`            | `varchar(100)`          | Ya       | `null`           | Token sesi remember me                                |
+| `timezone`                  | `varchar(64)`           | Tidak    | `'Asia/Jakarta'` | IANA timezone pengguna                                |
+| `whatsapp_number`           | `varchar(32)` (INDEX)   | Ya       | `null`           | Nomor WA format internasional (mis. `+6281234567890`) |
+| `whatsapp_verified_at`      | `timestamp`             | Ya       | `null`           | Waktu nomor WA terverifikasi OTP (`D-14`)             |
+| `whatsapp_enabled`          | `boolean`               | Tidak    | `false`          | Persetujuan penerimaan pengingat WA                   |
+| `reminder_quiet_start`      | `time`                  | Ya       | `'00:00:00'`     | Awal jam tenang lokal (`D-06`)                        |
+| `reminder_quiet_end`        | `time`                  | Ya       | `'05:00:00'`     | Akhir jam tenang lokal (`D-06`)                       |
+| `created_at`                | `timestamp`             | Ya       | `null`           | UTC                                                   |
+| `updated_at`                | `timestamp`             | Ya       | `null`           | UTC                                                   |
 
-### 2.2 Tabel `projects` (`Implemented`)
+---
+
+### 3.2 Tabel `projects`
 
 Model: [app/Models/Project.php](../app/Models/Project.php) | Enum: [app/Enums/ProjectStatus.php](../app/Enums/ProjectStatus.php) (`active`, `completed`, `archived`)
 
@@ -76,9 +81,11 @@ Model: [app/Models/Project.php](../app/Models/Project.php) | Enum: [app/Enums/Pr
 | `updated_at`   | `timestamp`                 | Ya       | `null`     | UTC                                             |
 | `deleted_at`   | `timestamp`                 | Ya       | `null`     | Soft delete (`D-11`)                            |
 
-**Indexes:** `(user_id, status)`, `(user_id, due_date)`.
+- **Indexes:** `(user_id, status)`, `(user_id, due_date)`.
 
-### 2.3 Tabel `tasks` (`Implemented`)
+---
+
+### 3.3 Tabel `tasks`
 
 Model: [app/Models/Task.php](../app/Models/Task.php) | Enums: [app/Enums/TaskStatus.php](../app/Enums/TaskStatus.php) (`todo`, `in_progress`, `completed`, `cancelled`), [app/Enums/TaskPriority.php](../app/Enums/TaskPriority.php) (`low`, `medium`, `high`, `urgent`)
 
@@ -99,81 +106,71 @@ Model: [app/Models/Task.php](../app/Models/Task.php) | Enums: [app/Enums/TaskSta
 | `updated_at`   | `timestamp`                    | Ya       | `null`     | UTC                                                |
 | `deleted_at`   | `timestamp`                    | Ya       | `null`     | Soft delete (`D-11`)                               |
 
-**Indexes:** `(user_id, status)`, `(user_id, due_at)`, `(project_id, status)`, `(user_id, priority)`.
+- **Indexes:** `(user_id, status)`, `(user_id, due_at)`, `(project_id, status)`, `(user_id, priority)`.
 
 ---
 
-## 3. Spesifikasi Skema Target untuk Phase 3, Phase 5, dan Phase 6 (`PLANNED`)
+### 3.4 Tabel `calendar_events`
 
-> **Instruksi untuk AI Agent:** Saat mengimplementasikan Phase 3, Phase 5, dan Phase 6, gunakan definisi kolom, tipe data, foreign key, dan index di bawah ini secara presisi.
+Model: [app/Models/CalendarEvent.php](../app/Models/CalendarEvent.php)
 
-### 3.1 Tabel `calendar_events` (Phase 3 — termasuk Agenda Berulang `D-08`)
+| Kolom                   | Tipe PostgreSQL                       | Nullable | Default | Keterangan                                                                                   |
+| :---------------------- | :------------------------------------ | :------- | :------ | :------------------------------------------------------------------------------------------- |
+| `id`                    | `bigint` (PK)                         | Tidak    | Auto    | ID agenda                                                                                    |
+| `user_id`               | `bigint` (FK -> `users.id`)           | Tidak    | —       | `cascadeOnDelete()`                                                                          |
+| `project_id`            | `bigint` (FK -> `projects.id`)        | Ya       | `null`  | `nullOnDelete()` — wajib milik `user_id` yang sama                                           |
+| `task_id`               | `bigint` (FK -> `tasks.id`)           | Ya       | `null`  | `nullOnDelete()` — wajib milik `user_id` yang sama                                           |
+| `parent_event_id`       | `bigint` (FK -> `calendar_events.id`) | Ya       | `null`  | `cascadeOnDelete()` — diisi untuk _single-occurrence override_ dari agenda berulang (`D-08`) |
+| `recurrence_id`         | `varchar(64)`                         | Ya       | `null`  | Identifier tanggal kejadian asli yang di-override (`YYYY-MM-DD`, `D-08`)                     |
+| `title`                 | `varchar(200)`                        | Tidak    | —       | Judul agenda                                                                                 |
+| `description`           | `text`                                | Ya       | `null`  | Deskripsi agenda                                                                             |
+| `starts_at`             | `timestamp`                           | Ya       | `null`  | Waktu mulai UTC (wajib jika `is_all_day = false`, `null` jika `is_all_day = true`)           |
+| `ends_at`               | `timestamp`                           | Ya       | `null`  | Waktu selesai UTC (`ends_at > starts_at` jika `is_all_day = false`)                          |
+| `start_date`            | `date`                                | Ya       | `null`  | Tanggal awal lokal (wajib jika `is_all_day = true`, `null` jika `is_all_day = false`)        |
+| `end_date`              | `date`                                | Ya       | `null`  | Tanggal akhir lokal (`end_date >= start_date` jika `is_all_day = true`)                      |
+| `is_all_day`            | `boolean`                             | Tidak    | `false` | Penanda agenda sepanjang hari                                                                |
+| `is_cancelled`          | `boolean`                             | Tidak    | `false` | Penanda jika kejadian tunggal dibatalkan (`D-08`)                                            |
+| `recurrence_rule`       | `varchar(255)`                        | Ya       | `null`  | Aturan pengulangan (`FREQ=DAILY`, `FREQ=WEEKLY`, `FREQ=MONTHLY`, dll.) (`D-08`)              |
+| `recurrence_until`      | `date`                                | Ya       | `null`  | Batas akhir pengulangan tanggal lokal (`D-08`)                                               |
+| `recurrence_exceptions` | `jsonb`                               | Ya       | `null`  | Array tanggal kejadian yang dikecualikan dari rangkaian, mis. `["2026-11-25"]` (`D-08`)      |
+| `created_at`            | `timestamp`                           | Ya       | `null`  | UTC                                                                                          |
+| `updated_at`            | `timestamp`                           | Ya       | `null`  | UTC                                                                                          |
+| `deleted_at`            | `timestamp`                           | Ya       | `null`  | Soft delete (`D-11`)                                                                         |
 
-Nama file migrasi yang direkomendasikan: `database/migrations/2026_11_15_000004_create_calendar_events_table.php`
+- **Indexes:** `(user_id, starts_at, ends_at)`, `(user_id, start_date, end_date)`, `(parent_event_id, recurrence_id)`.
 
-| Kolom                   | Tipe PostgreSQL                       | Nullable | Default | Keterangan                                                                                                                          |
-| :---------------------- | :------------------------------------ | :------- | :------ | :---------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                    | `bigint` (PK)                         | Tidak    | Auto    | ID agenda                                                                                                                           |
-| `user_id`               | `bigint` (FK -> `users.id`)           | Tidak    | —       | `cascadeOnDelete()`                                                                                                                 |
-| `project_id`            | `bigint` (FK -> `projects.id`)        | Ya       | `null`  | `nullOnDelete()` — wajib milik `user_id` yang sama                                                                                  |
-| `task_id`               | `bigint` (FK -> `tasks.id`)           | Ya       | `null`  | `nullOnDelete()` — wajib milik `user_id` yang sama                                                                                  |
-| `parent_event_id`       | `bigint` (FK -> `calendar_events.id`) | Ya       | `null`  | `cascadeOnDelete()` — diisi jika baris ini adalah perubahan 1 kejadian (_single-occurrence override_) dari agenda berulang (`D-08`) |
-| `recurrence_id`         | `varchar(64)`                         | Ya       | `null`  | Identifier tanggal/waktu kejadian asli yang di-override (mis. `'2026-11-20'` atau ISO UTC string) (`D-08`)                          |
-| `title`                 | `varchar(200)`                        | Tidak    | —       | Judul agenda                                                                                                                        |
-| `description`           | `text`                                | Ya       | `null`  | Deskripsi agenda                                                                                                                    |
-| `starts_at`             | `timestamp`                           | Ya       | `null`  | Waktu mulai UTC (wajib jika `is_all_day = false`, `null` jika `is_all_day = true`)                                                  |
-| `ends_at`               | `timestamp`                           | Ya       | `null`  | Waktu selesai UTC (`ends_at > starts_at` jika `is_all_day = false`)                                                                 |
-| `start_date`            | `date`                                | Ya       | `null`  | Tanggal awal lokal (wajib jika `is_all_day = true`, `null` jika `is_all_day = false`)                                               |
-| `end_date`              | `date`                                | Ya       | `null`  | Tanggal akhir lokal (`end_date >= start_date` jika `is_all_day = true`)                                                             |
-| `is_all_day`            | `boolean`                             | Tidak    | `false` | Penanda agenda sepanjang hari                                                                                                       |
-| `is_cancelled`          | `boolean`                             | Tidak    | `false` | Penanda jika kejadian tunggal dibatalkan (`D-08`)                                                                                   |
-| `recurrence_rule`       | `varchar(255)`                        | Ya       | `null`  | Aturan pengulangan RFC 5545 ringkas, mis. `FREQ=DAILY;INTERVAL=1`, `FREQ=WEEKLY;BYDAY=MO,WE`, `FREQ=MONTHLY` (`D-08`)               |
-| `recurrence_until`      | `date`                                | Ya       | `null`  | Batas akhir pengulangan tanggal lokal (`D-08`)                                                                                      |
-| `recurrence_exceptions` | `jsonb`                               | Ya       | `null`  | Array tanggal/waktu kejadian yang dikecualikan/dihapus dari rangkaian, mis. `["2026-11-25"]` (`D-08`)                               |
-| `created_at`            | `timestamp`                           | Ya       | `null`  | UTC                                                                                                                                 |
-| `updated_at`            | `timestamp`                           | Ya       | `null`  | UTC                                                                                                                                 |
-| `deleted_at`            | `timestamp`                           | Ya       | `null`  | Soft delete (`D-11`)                                                                                                                |
+---
 
-**Indexes Wajib `calendar_events`:**
+### 3.5 Tabel `reminders`
 
-- `(user_id, starts_at, ends_at)`
-- `(user_id, start_date, end_date)`
-- `(parent_event_id, recurrence_id)`
+Model: [app/Models/Reminder.php](../app/Models/Reminder.php) | Enum: [app/Enums/ReminderStatus.php](../app/Enums/ReminderStatus.php) (`pending`, `processing`, `sent`, `failed`, `cancelled`)
 
-### 3.2 Tabel `reminders` (Phase 5 — Multi-Reminder `D-05` & Idempotency)
+| Kolom                 | Tipe PostgreSQL                       | Nullable | Default      | Keterangan                                                                            |
+| :-------------------- | :------------------------------------ | :------- | :----------- | :------------------------------------------------------------------------------------ |
+| `id`                  | `bigint` (PK)                         | Tidak    | Auto         | ID reminder                                                                           |
+| `user_id`             | `bigint` (FK -> `users.id`)           | Tidak    | —            | `cascadeOnDelete()`                                                                   |
+| `task_id`             | `bigint` (FK -> `tasks.id`)           | Ya       | `null`       | `cascadeOnDelete()` — tugas terkait                                                   |
+| `calendar_event_id`   | `bigint` (FK -> `calendar_events.id`) | Ya       | `null`       | `cascadeOnDelete()` — agenda terkait                                                  |
+| `channel`             | `varchar(20)`                         | Tidak    | `'whatsapp'` | Kanal notifikasi (`whatsapp`)                                                         |
+| `reminder_type`       | `varchar(40)`                         | Tidak    | `'custom'`   | `before_24h`, `before_1h`, `event_start`, `ai_recommended`, `custom` (`D-05`, `D-07`) |
+| `scheduled_at`        | `timestamp`                           | Tidak    | —            | Waktu pengiriman dalam **UTC** (setelah evaluasi `QuietHoursAdjuster`)                |
+| `status`              | `varchar(20)`                         | Tidak    | `'pending'`  | `pending` / `processing` / `sent` / `failed` / `cancelled`                            |
+| `message`             | `text`                                | Tidak    | —            | Konten pesan pengingat                                                                |
+| `provider_message_id` | `varchar(150)`                        | Ya       | `null`       | ID pesan dari gateway WhatsApp                                                        |
+| `sent_at`             | `timestamp`                           | Ya       | `null`       | Waktu berhasil dikirim (UTC)                                                          |
+| `failed_at`           | `timestamp`                           | Ya       | `null`       | Waktu gagal dikirim (UTC)                                                             |
+| `failure_reason`      | `text`                                | Ya       | `null`       | Ringkasan error aman (tanpa kredensial `D-15`)                                        |
+| `idempotency_key`     | `varchar(100)` (UNIQUE)               | Tidak    | —            | Kunci unik pengiriman (`task:...`, `event:...`, `ai_rec:...`)                         |
+| `created_at`          | `timestamp`                           | Ya       | `null`       | UTC                                                                                   |
+| `updated_at`          | `timestamp`                           | Ya       | `null`       | UTC                                                                                   |
 
-Nama file migrasi yang direkomendasikan: `database/migrations/2026_11_15_000005_create_reminders_table.php`
-Enum yang direkomendasikan: `App\Enums\ReminderStatus` (`pending`, `processing`, `sent`, `failed`, `cancelled`).
+- **Indexes:** `(status, scheduled_at)`, `(user_id, status)`, unique index pada `idempotency_key`.
 
-| Kolom                 | Tipe PostgreSQL                       | Nullable | Default      | Keterangan                                                                                                |
-| :-------------------- | :------------------------------------ | :------- | :----------- | :-------------------------------------------------------------------------------------------------------- |
-| `id`                  | `bigint` (PK)                         | Tidak    | Auto         | ID reminder                                                                                               |
-| `user_id`             | `bigint` (FK -> `users.id`)           | Tidak    | —            | `cascadeOnDelete()`                                                                                       |
-| `task_id`             | `bigint` (FK -> `tasks.id`)           | Ya       | `null`       | `cascadeOnDelete()` — tugas terkait                                                                       |
-| `calendar_event_id`   | `bigint` (FK -> `calendar_events.id`) | Ya       | `null`       | `cascadeOnDelete()` — agenda terkait                                                                      |
-| `channel`             | `varchar(20)`                         | Tidak    | `'whatsapp'` | Kanal notifikasi (`whatsapp`)                                                                             |
-| `reminder_type`       | `varchar(40)`                         | Tidak    | `'custom'`   | Jenis trigger, mis. `before_24h`, `before_1h`, `ai_recommended`, `event_start`, `custom` (`D-05`, `D-07`) |
-| `scheduled_at`        | `timestamp`                           | Tidak    | —            | Waktu pengiriman dalam **UTC**                                                                            |
-| `status`              | `varchar(20)`                         | Tidak    | `'pending'`  | `pending` / `processing` / `sent` / `failed` / `cancelled`                                                |
-| `message`             | `text`                                | Tidak    | —            | Konten pesan pengingat (tanpa data sensitif `D-15`)                                                       |
-| `provider_message_id` | `varchar(150)`                        | Ya       | `null`       | ID pesan dari WhatsApp gateway                                                                            |
-| `sent_at`             | `timestamp`                           | Ya       | `null`       | Waktu berhasil dikirim (UTC)                                                                              |
-| `failed_at`           | `timestamp`                           | Ya       | `null`       | Waktu gagal dikirim (UTC)                                                                                 |
-| `failure_reason`      | `text`                                | Ya       | `null`       | Ringkasan error aman (tanpa token/kredensial `D-15`)                                                      |
-| `idempotency_key`     | `varchar(100)` (UNIQUE)               | Tidak    | —            | Kunci unik pengiriman (mis. `task:{id}:{type}:{timestamp}`)                                               |
-| `created_at`          | `timestamp`                           | Ya       | `null`       | UTC                                                                                                       |
-| `updated_at`          | `timestamp`                           | Ya       | `null`       | UTC                                                                                                       |
+---
 
-**Indexes Wajib `reminders`:**
+### 3.6 Tabel `ai_planner_runs`
 
-- `(status, scheduled_at)`
-- `(user_id, status)`
-- Unique index pada `idempotency_key`
-
-### 3.3 Tabel `ai_planner_runs` (Phase 6 — AI Planner `D-03`, `D-04`, `D-12`, `D-15`)
-
-Nama file migrasi yang direkomendasikan: `database/migrations/2026_11_15_000006_create_ai_planner_runs_table.php`
-Enum yang direkomendasikan: `App\Enums\AiPlannerRunStatus` (`pending`, `success`, `failed`).
+Model: [app/Models/AiPlannerRun.php](../app/Models/AiPlannerRun.php) | Enum: [app/Enums/AiPlannerRunStatus.php](../app/Enums/AiPlannerRunStatus.php) (`pending`, `success`, `failed`)
 
 | Kolom            | Tipe PostgreSQL             | Nullable | Default     | Keterangan                                                                            |
 | :--------------- | :-------------------------- | :------- | :---------- | :------------------------------------------------------------------------------------ |
@@ -184,20 +181,28 @@ Enum yang direkomendasikan: `App\Enums\AiPlannerRunStatus` (`pending`, `success`
 | `provider`       | `varchar(50)`               | Tidak    | —           | `gemini` / `grok` / `openrouter` / `fallback` (`D-03`)                                |
 | `model`          | `varchar(100)`              | Ya       | `null`      | Nama model yang digunakan (`D-04`)                                                    |
 | `status`         | `varchar(20)`               | Tidak    | `'pending'` | `pending` / `success` / `failed`                                                      |
-| `input_snapshot` | `jsonb`                     | Ya       | `null`      | Konteks ringkas yang dikirim (tanpa nomor WA/token/kredensial `D-15`)                 |
+| `input_snapshot` | `jsonb`                     | Ya       | `null`      | Konteks yang telah disanitasi (`AiPlannerContext::toSanitizedSnapshot()`, `D-15`)     |
 | `result`         | `jsonb`                     | Ya       | `null`      | Hasil JSON tervalidasi (`summary`, `priorities`, `recommended_reminders`, `warnings`) |
 | `error_message`  | `text`                      | Ya       | `null`      | Ringkasan error yang telah disanitasi (`D-15`)                                        |
 | `created_at`     | `timestamp`                 | Ya       | `null`      | UTC                                                                                   |
 | `updated_at`     | `timestamp`                 | Ya       | `null`      | UTC                                                                                   |
 
-**Indexes Wajib `ai_planner_runs`:**
-
-- `(user_id, planning_date)`
-- `(status, created_at)`
+- **Indexes:** `(user_id, planning_date)`, `(status, created_at)`.
 
 ---
 
-## 4. Diagram Relasi Entitas Lengkap (ERD MVP 1)
+## 4. Kebijakan Retensi & Pembersihan Data (`D-11`, `D-15`)
+
+Command [PruneRetentionDataCommand.php](../app/Console/Commands/PruneRetentionDataCommand.php) (`php artisan app:prune-retention-data {--days=30}`) dijadwalkan berjalan setiap hari pukul `02:30` UTC di [routes/console.php](../routes/console.php):
+
+1. **Purge Soft-Deleted Records (`D-11`):** Menghapus permanen (`forceDelete()`) baris pada `tasks`, `calendar_events`, dan `projects` yang memiliki `deleted_at < now()->subDays($days)`.
+2. **Prune Terminal Logs (`D-15`):**
+    - Menghapus baris `reminders` berstatus terminal (`sent`, `failed`, `cancelled`) dengan `updated_at < now()->subDays($days)` (reminder `pending` dan `processing` tidak pernah dihapus).
+    - Menghapus baris `ai_planner_runs` dengan `created_at < now()->subDays($days)`.
+
+---
+
+## 5. Diagram Relasi Entitas Lengkap (ERD MVP 1)
 
 ```mermaid
 erDiagram
