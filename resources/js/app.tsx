@@ -1,10 +1,32 @@
 import { createInertiaApp } from '@inertiajs/react';
-import { Toaster } from '@/components/ui/sonner';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { initializeTheme } from '@/hooks/use-appearance';
 import AppLayout from '@/layouts/app-layout';
-import AuthLayout from '@/layouts/auth-layout';
-import SettingsLayout from '@/layouts/settings/layout';
+
+const LazyAuthLayout = lazy(() => import('@/layouts/auth-layout'));
+const LazySettingsLayout = lazy(() => import('@/layouts/settings/layout'));
+const LazyToaster = lazy(async () => {
+    const module = await import('@/components/ui/sonner');
+
+    return { default: module.Toaster };
+});
+
+function AuthLayoutWrapper({ children }: { children: ReactNode }) {
+    return (
+        <Suspense fallback={null}>
+            <LazyAuthLayout>{children}</LazyAuthLayout>
+        </Suspense>
+    );
+}
+
+function SettingsLayoutWrapper({ children }: { children: ReactNode }) {
+    return (
+        <Suspense fallback={null}>
+            <LazySettingsLayout>{children}</LazySettingsLayout>
+        </Suspense>
+    );
+}
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
@@ -15,9 +37,9 @@ void createInertiaApp({
             case name === 'welcome':
                 return null;
             case name.startsWith('auth/'):
-                return AuthLayout;
+                return AuthLayoutWrapper;
             case name.startsWith('settings/'):
-                return [AppLayout, SettingsLayout];
+                return [AppLayout, SettingsLayoutWrapper];
             default:
                 return AppLayout;
         }
@@ -27,7 +49,9 @@ void createInertiaApp({
         return (
             <TooltipProvider delayDuration={0}>
                 {app}
-                <Toaster />
+                <Suspense fallback={null}>
+                    <LazyToaster />
+                </Suspense>
             </TooltipProvider>
         );
     },

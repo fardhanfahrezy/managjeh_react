@@ -3,6 +3,10 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta
+            name="description"
+            content="Managjeh — Personal OS Mahasiswa untuk mengelola tugas, proyek, kalender, pengingat WhatsApp, dan AI Planner harian."
+        >
 
         {{-- Inline script to detect system dark mode preference and apply it immediately --}}
         <script>
