@@ -15,7 +15,7 @@ Dokumen ini mendokumentasikan seluruh mekanisme keamanan, isolasi kepemilikan da
     - Mendukung Two-Factor Authentication (TOTP + recovery codes terenkripsi) dan WebAuthn Passkeys (`@laravel/passkeys`).
     - Halaman pengaturan keamanan (`GET /settings/security`) dilindungi oleh middleware `RequirePassword`.
 3. **Password Policy:**
-    - `AppServiceProvider` menegakkan aturan password di seluruh environment: panjang **8–16 karakter**, wajib mengandung **huruf kapital**, **huruf kecil**, **angka**, dan **tanpa spasi** (`Password::min(8)->max(16)->mixedCase()->numbers()` + validasi no-whitespace).
+    - Di lingkungan produksi (`app()->isProduction()`), `AppServiceProvider` menegakkan password minimal 12 karakter dengan kombinasi huruf besar/kecil, angka, simbol, dan pemeriksaan `uncompromised()`.
 
 ---
 
