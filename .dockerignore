@@ -1,0 +1,21 @@
+# Ignore local environment, dependencies, and dev-only directories from Docker build context
+.git
+.github
+.agents
+.codex
+.impeccable
+node_modules
+vendor
+public/build
+public/hot
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+.env
+.env.*
+!.env.example
+phpunit.xml
+phpstan.neon
+pint.json
+tests
