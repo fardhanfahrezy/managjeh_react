@@ -63,7 +63,7 @@ export default function ProjectShow({ project, projects }: ProjectShowProps) {
         <>
             <Head title={project.name} />
 
-            <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 md:p-6">
+            <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
                 <div>
                     <Link
                         href={projectsIndex()}
