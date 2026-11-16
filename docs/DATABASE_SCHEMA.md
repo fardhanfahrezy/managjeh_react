@@ -1,6 +1,6 @@
 # Database Schema — Managjeh (Personal OS Mahasiswa — MVP 1)
 
-Dokumen ini mendokumentasikan skema database **PostgreSQL** (`managjeh` & `managjeh_test`) yang **telah diimplementasikan dan terverifikasi penuh (`Implemented & Verified`)** melalui **11 file migrasi aktif** di `database/migrations/`.
+Dokumen ini mendokumentasikan skema database **PostgreSQL** (`managjeh` & `managjeh_test`) yang **telah diimplementasikan dan terverifikasi penuh (`Implemented & Verified`)** melalui **12 file migrasi aktif** di `database/migrations/`.
 
 Seluruh nama tabel dan kolom menggunakan **Bahasa Inggris `snake_case`**.
 
@@ -19,7 +19,7 @@ Seluruh nama tabel dan kolom menggunakan **Bahasa Inggris `snake_case`**.
 
 ---
 
-## 2. Daftar 11 Migrasi Aktif (`database/migrations/`)
+## 2. Daftar 12 Migrasi Aktif (`database/migrations/`)
 
 1. `0001_01_01_000000_create_users_table.php` — Membuat tabel `users`, `password_reset_tokens`, dan `sessions`.
 2. `0001_01_01_000001_create_cache_table.php` — Membuat tabel `cache` dan `cache_locks` (digunakan juga untuk OTP hash WhatsApp, rate limiter, dan circuit breaker AI).
@@ -32,6 +32,7 @@ Seluruh nama tabel dan kolom menggunakan **Bahasa Inggris `snake_case`**.
 9. `2026_11_15_000004_create_calendar_events_table.php` — Membuat tabel `calendar_events`.
 10. `2026_11_15_000005_create_reminders_table.php` — Membuat tabel `reminders`.
 11. `2026_11_15_000006_create_ai_planner_runs_table.php` — Membuat tabel `ai_planner_runs`.
+12. `2026_11_16_000007_add_performance_indexes.php` — Menambahkan indeks FK dan indeks komposit query untuk `tasks`, `calendar_events`, dan `reminders`.
 
 ---
 
@@ -106,7 +107,7 @@ Model: [app/Models/Task.php](../app/Models/Task.php) | Enums: [app/Enums/TaskSta
 | `updated_at`   | `timestamp`                    | Ya       | `null`     | UTC                                                |
 | `deleted_at`   | `timestamp`                    | Ya       | `null`     | Soft delete (`D-11`)                               |
 
-- **Indexes:** `(user_id, status)`, `(user_id, due_at)`, `(project_id, status)`, `(user_id, priority)`.
+- **Indexes:** `(user_id, status)`, `(user_id, due_at)`, `(project_id, status)`, `(user_id, priority)`, `(parent_id)`, `(user_id, parent_id, status, due_at)`, `(user_id, status, completed_at)`.
 
 ---
 
@@ -137,7 +138,7 @@ Model: [app/Models/CalendarEvent.php](../app/Models/CalendarEvent.php)
 | `updated_at`            | `timestamp`                           | Ya       | `null`  | UTC                                                                                          |
 | `deleted_at`            | `timestamp`                           | Ya       | `null`  | Soft delete (`D-11`)                                                                         |
 
-- **Indexes:** `(user_id, starts_at, ends_at)`, `(user_id, start_date, end_date)`, `(parent_event_id, recurrence_id)`.
+- **Indexes:** `(user_id, starts_at, ends_at)`, `(user_id, start_date, end_date)`, `(parent_event_id, recurrence_id)`, `(project_id)`, `(task_id)`, `(user_id, parent_event_id)`.
 
 ---
 
@@ -164,7 +165,7 @@ Model: [app/Models/Reminder.php](../app/Models/Reminder.php) | Enum: [app/Enums/
 | `created_at`          | `timestamp`                           | Ya       | `null`       | UTC                                                                                   |
 | `updated_at`          | `timestamp`                           | Ya       | `null`       | UTC                                                                                   |
 
-- **Indexes:** `(status, scheduled_at)`, `(user_id, status)`, unique index pada `idempotency_key`.
+- **Indexes:** `(status, scheduled_at)`, `(user_id, status)`, `(task_id)`, `(calendar_event_id)`, unique index pada `idempotency_key`.
 
 ---
 
