@@ -27,7 +27,7 @@ php artisan migrate --force
 echo "Starting background queue worker..."
 (
     while true; do
-        php artisan queue:work database --sleep=3 --tries=3 --backoff=15,60,180 --timeout=30 --max-time=3600 || true
+        php artisan queue:work database --sleep=15 --tries=3 --backoff=15,60,180 --timeout=30 --max-time=3600 || true
         sleep 5
     done
 ) &

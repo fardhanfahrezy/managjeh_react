@@ -38,8 +38,9 @@ RUN composer install --no-dev --optimize-autoloader --no-scripts --no-interactio
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
-# Copy application source
+# Copy application source and PHP production tuning
 COPY . .
+COPY docker/php/production.ini /usr/local/etc/php/conf.d/99-production.ini
 
 # Build Wayfinder routes and production Vite bundle, then strip Node artifacts from runtime image
 RUN cp .env.example .env \
