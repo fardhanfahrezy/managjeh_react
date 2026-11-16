@@ -184,3 +184,38 @@ test('user cannot update or delete another users calendar event', function () {
         ->delete(route('calendar-events.destroy', $event))
         ->assertForbidden();
 });
+
+test('calendar index excludes distant standalone and expired recurring events while keeping active spans', function () {
+    $user = User::factory()->create(['timezone' => 'Asia/Jakarta']);
+
+    CalendarEvent::factory()->for($user)->create([
+        'title' => 'Acara Bulan Lalu',
+        'starts_at' => CarbonImmutable::parse('2026-10-01 09:00:00', 'Asia/Jakarta')->utc(),
+        'ends_at' => CarbonImmutable::parse('2026-10-01 10:00:00', 'Asia/Jakarta')->utc(),
+    ]);
+
+    CalendarEvent::factory()->for($user)->create([
+        'title' => 'Seri Sudah Selesai',
+        'starts_at' => CarbonImmutable::parse('2026-09-07 09:00:00', 'Asia/Jakarta')->utc(),
+        'ends_at' => CarbonImmutable::parse('2026-09-07 10:00:00', 'Asia/Jakarta')->utc(),
+        'recurrence_rule' => 'FREQ=WEEKLY;BYDAY=MO',
+        'recurrence_until' => '2026-10-31',
+    ]);
+
+    CalendarEvent::factory()->for($user)->create([
+        'title' => 'Expo Kampus',
+        'is_all_day' => true,
+        'starts_at' => null,
+        'ends_at' => null,
+        'start_date' => '2026-11-14',
+        'end_date' => '2026-11-17',
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('calendar.index', ['view' => 'week', 'date' => '2026-11-16']))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('events', 1)
+            ->where('events.0.title', 'Expo Kampus')
+        );
+});

@@ -7,7 +7,9 @@ use App\Models\CalendarEvent;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\DashboardAggregatorService;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('guests are redirected to the login page', function () {
@@ -100,6 +102,76 @@ test('authenticated users can visit the dashboard with aggregated sections', fun
             ->where('completed_summary.last_7_days_count', 1)
             ->where('completed_summary.active_count', 3)
         );
+
+    CarbonImmutable::setTestNow();
+});
+
+test('dashboard aggregator consolidates queries and pushes down calendar date bounds', function () {
+    CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-11-16 09:00:00', 'Asia/Jakarta'));
+
+    $user = User::factory()->create(['timezone' => 'Asia/Jakarta']);
+    $project = Project::factory()->for($user)->create(['status' => ProjectStatus::Active]);
+
+    Task::factory()->for($user)->for($project)->create([
+        'title' => 'Hari Ini',
+        'status' => TaskStatus::InProgress,
+        'due_at' => CarbonImmutable::parse('2026-11-16 15:00:00', 'Asia/Jakarta')->utc(),
+    ]);
+    Task::factory()->for($user)->for($project)->create([
+        'title' => 'Lusa',
+        'status' => TaskStatus::Todo,
+        'due_at' => CarbonImmutable::parse('2026-11-18 15:00:00', 'Asia/Jakarta')->utc(),
+    ]);
+    Task::factory()->for($user)->create([
+        'title' => 'Selesai Kemarin',
+        'status' => TaskStatus::Completed,
+        'completed_at' => CarbonImmutable::parse('2026-11-15 10:00:00', 'Asia/Jakarta')->utc(),
+    ]);
+
+    // Unrelated distant standalone event (must be excluded in SQL)
+    CalendarEvent::factory()->for($user)->create([
+        'title' => 'Acara Bulan Lalu',
+        'starts_at' => CarbonImmutable::parse('2026-10-10 08:00:00', 'Asia/Jakarta')->utc(),
+        'ends_at' => CarbonImmutable::parse('2026-10-10 09:00:00', 'Asia/Jakarta')->utc(),
+    ]);
+
+    // Expired recurring event (must be excluded in SQL)
+    CalendarEvent::factory()->for($user)->create([
+        'title' => 'Kelas Lama Berakhir',
+        'starts_at' => CarbonImmutable::parse('2026-10-05 08:00:00', 'Asia/Jakarta')->utc(),
+        'ends_at' => CarbonImmutable::parse('2026-10-05 09:00:00', 'Asia/Jakarta')->utc(),
+        'recurrence_rule' => 'FREQ=WEEKLY;BYDAY=MO',
+        'recurrence_until' => '2026-11-10',
+    ]);
+
+    // Multi-day all-day event spanning today
+    CalendarEvent::factory()->for($user)->create([
+        'title' => 'Pekan Ilmiah',
+        'is_all_day' => true,
+        'starts_at' => null,
+        'ends_at' => null,
+        'start_date' => '2026-11-15',
+        'end_date' => '2026-11-17',
+    ]);
+
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+
+    $data = app(DashboardAggregatorService::class)->aggregate($user);
+
+    $queries = DB::getQueryLog();
+    DB::disableQueryLog();
+
+    expect($data['today_tasks'])->toHaveCount(1)
+        ->and($data['upcoming_tasks'])->toHaveCount(1)
+        ->and($data['today_events'])->toHaveCount(1)
+        ->and($data['today_events'][0]['title'])->toBe('Pekan Ilmiah')
+        ->and($data['completed_summary'])->toBe([
+            'today_count' => 0,
+            'last_7_days_count' => 1,
+            'active_count' => 2,
+        ])
+        ->and(count($queries))->toBeLessThanOrEqual(6);
 
     CarbonImmutable::setTestNow();
 });
