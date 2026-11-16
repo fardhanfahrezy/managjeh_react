@@ -6,12 +6,16 @@ use App\Enums\AiPlannerRunStatus;
 use App\Enums\ProjectStatus;
 use App\Enums\TaskStatus;
 use App\Models\AiPlannerRun;
+use App\Models\CalendarEvent;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\Calendar\RecurrenceExpanderService;
 use App\Services\Calendar\ScheduleConflictDetector;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Query\JoinClause;
 
 class DashboardAggregatorService
 {
@@ -79,6 +83,32 @@ class DashboardAggregatorService
     }
 
     /**
+     * @return HasMany<Task, User>
+     */
+    private function baseDashboardTaskQuery(User $user): HasMany
+    {
+        return $user->tasks()
+            ->leftJoin('projects', function (JoinClause $join): void {
+                $join->on('projects.id', '=', 'tasks.project_id')
+                    ->whereNull('projects.deleted_at');
+            })
+            ->whereNull('tasks.parent_id')
+            ->whereIn('tasks.status', [TaskStatus::Todo->value, TaskStatus::InProgress->value])
+            ->select([
+                'tasks.id',
+                'tasks.user_id',
+                'tasks.project_id',
+                'tasks.title',
+                'tasks.status',
+                'tasks.priority',
+                'tasks.due_at',
+                'tasks.sort_order',
+                'projects.name as joined_project_name',
+                'projects.status as joined_project_status',
+            ]);
+    }
+
+    /**
      * @return array<int, array<string, mixed>>
      */
     private function getTodayTasks(
@@ -87,17 +117,14 @@ class DashboardAggregatorService
         CarbonImmutable $todayEndUtc,
         string $timezone,
     ): array {
-        return $user->tasks()
-            ->whereNull('parent_id')
-            ->whereIn('status', [TaskStatus::Todo->value, TaskStatus::InProgress->value])
+        return $this->baseDashboardTaskQuery($user)
             ->where(function ($query) use ($todayStartUtc, $todayEndUtc): void {
-                $query->where('status', TaskStatus::InProgress->value)
-                    ->orWhereBetween('due_at', [$todayStartUtc, $todayEndUtc]);
+                $query->where('tasks.status', TaskStatus::InProgress->value)
+                    ->orWhereBetween('tasks.due_at', [$todayStartUtc, $todayEndUtc]);
             })
-            ->with('project:id,name,status')
-            ->orderByRaw('due_at IS NULL')
-            ->orderBy('due_at')
-            ->orderBy('sort_order')
+            ->orderByRaw('tasks.due_at IS NULL')
+            ->orderBy('tasks.due_at')
+            ->orderBy('tasks.sort_order')
             ->limit(10)
             ->get()
             ->map(fn (Task $task): array => $this->serializeTask($task, $todayStartUtc, $timezone))
@@ -115,19 +142,16 @@ class DashboardAggregatorService
         CarbonImmutable $upcomingEndUtc,
         string $timezone,
     ): array {
-        return $user->tasks()
-            ->whereNull('parent_id')
-            ->whereIn('status', [TaskStatus::Todo->value, TaskStatus::InProgress->value])
-            ->whereNotNull('due_at')
+        return $this->baseDashboardTaskQuery($user)
+            ->whereNotNull('tasks.due_at')
             ->where(function ($query) use ($todayStartUtc, $todayEndUtc, $upcomingEndUtc): void {
-                $query->where('due_at', '<', $todayStartUtc)
+                $query->where('tasks.due_at', '<', $todayStartUtc)
                     ->orWhere(function ($inner) use ($todayEndUtc, $upcomingEndUtc): void {
-                        $inner->where('due_at', '>', $todayEndUtc)
-                            ->where('due_at', '<=', $upcomingEndUtc);
+                        $inner->where('tasks.due_at', '>', $todayEndUtc)
+                            ->where('tasks.due_at', '<=', $upcomingEndUtc);
                     });
             })
-            ->with('project:id,name,status')
-            ->orderBy('due_at')
+            ->orderBy('tasks.due_at')
             ->limit(8)
             ->get()
             ->map(fn (Task $task): array => $this->serializeTask($task, $todayStartUtc, $timezone))
@@ -143,15 +167,16 @@ class DashboardAggregatorService
         CarbonImmutable $todayLocal,
         string $timezone,
     ): array {
+        /** @var Collection<int, CalendarEvent> $rawEvents */
         $rawEvents = $user->calendarEvents()
-            ->whereNull('parent_event_id')
-            ->with([
-                'project:id,name',
-                'task:id,title,status',
-                'overrides.project:id,name',
-                'overrides.task:id,title,status',
-            ])
+            ->forDisplayRange($todayLocal, $todayLocal)
             ->get();
+
+        if ($rawEvents->isEmpty()) {
+            return [];
+        }
+
+        $this->recurrenceExpander->loadRelationsForRange($rawEvents, $todayLocal, $todayLocal);
 
         $occurrences = $this->recurrenceExpander->expand($rawEvents, $todayLocal, $todayLocal, $timezone);
 
@@ -210,25 +235,27 @@ class DashboardAggregatorService
         CarbonImmutable $todayEndUtc,
         CarbonImmutable $sevenDaysStartUtc,
     ): array {
-        $todayCount = $user->tasks()
-            ->where('status', TaskStatus::Completed->value)
-            ->whereBetween('completed_at', [$todayStartUtc, $todayEndUtc])
-            ->count();
-
-        $last7DaysCount = $user->tasks()
-            ->where('status', TaskStatus::Completed->value)
-            ->where('completed_at', '>=', $sevenDaysStartUtc)
-            ->count();
-
-        $activeCount = $user->tasks()
-            ->whereNull('parent_id')
-            ->whereIn('status', [TaskStatus::Todo->value, TaskStatus::InProgress->value])
-            ->count();
+        $summary = $user->tasks()
+            ->selectRaw(
+                'COUNT(*) FILTER (WHERE status = ? AND completed_at BETWEEN ? AND ?) as today_count, '.
+                'COUNT(*) FILTER (WHERE status = ? AND completed_at >= ?) as last_7_days_count, '.
+                'COUNT(*) FILTER (WHERE parent_id IS NULL AND status IN (?, ?)) as active_count',
+                [
+                    TaskStatus::Completed->value,
+                    $todayStartUtc->toDateTimeString(),
+                    $todayEndUtc->toDateTimeString(),
+                    TaskStatus::Completed->value,
+                    $sevenDaysStartUtc->toDateTimeString(),
+                    TaskStatus::Todo->value,
+                    TaskStatus::InProgress->value,
+                ],
+            )
+            ->first();
 
         return [
-            'today_count' => $todayCount,
-            'last_7_days_count' => $last7DaysCount,
-            'active_count' => $activeCount,
+            'today_count' => (int) ($summary?->getAttribute('today_count') ?? 0),
+            'last_7_days_count' => (int) ($summary?->getAttribute('last_7_days_count') ?? 0),
+            'active_count' => (int) ($summary?->getAttribute('active_count') ?? 0),
         ];
     }
 
@@ -238,6 +265,8 @@ class DashboardAggregatorService
     private function serializeTask(Task $task, CarbonImmutable $todayStartUtc, string $timezone): array
     {
         $localDue = $task->dueAtInUserTimezone($timezone);
+        $projectName = $task->getAttribute('joined_project_name');
+        $projectStatus = $task->getAttribute('joined_project_status');
 
         return [
             'id' => $task->id,
@@ -247,10 +276,10 @@ class DashboardAggregatorService
             'due_at' => $task->due_at?->toISOString(),
             'due_at_local' => $localDue?->format('Y-m-d\TH:i'),
             'is_overdue' => $task->due_at !== null && $task->due_at->lt($todayStartUtc),
-            'project' => $task->project !== null ? [
-                'id' => $task->project->id,
-                'name' => $task->project->name,
-                'status' => $task->project->status->value,
+            'project' => $task->project_id !== null && is_string($projectName) ? [
+                'id' => $task->project_id,
+                'name' => $projectName,
+                'status' => is_string($projectStatus) ? $projectStatus : null,
             ] : null,
         ];
     }

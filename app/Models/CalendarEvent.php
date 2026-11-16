@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Carbon\CarbonImmutable;
 use Database\Factories\CalendarEventFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -130,6 +131,61 @@ class CalendarEvent extends Model
             'recurrence_until' => 'immutable_date',
             'recurrence_exceptions' => 'array',
         ];
+    }
+
+    /**
+     * Restrict top-level events to those that can produce occurrences inside [rangeStartLocal, rangeEndLocal].
+     *
+     * @param  Builder<CalendarEvent>  $query
+     * @return Builder<CalendarEvent>
+     */
+    public function scopeForDisplayRange(
+        Builder $query,
+        CarbonImmutable $rangeStartLocal,
+        CarbonImmutable $rangeEndLocal,
+    ): Builder {
+        $rangeStartUtc = $rangeStartLocal->startOfDay()->utc();
+        $rangeEndUtc = $rangeEndLocal->endOfDay()->utc();
+        $rangeStartDate = $rangeStartLocal->format('Y-m-d');
+        $rangeEndDate = $rangeEndLocal->format('Y-m-d');
+
+        return $query
+            ->whereNull('parent_event_id')
+            ->where('is_cancelled', false)
+            ->where(function (Builder $outer) use ($rangeStartUtc, $rangeEndUtc, $rangeStartDate, $rangeEndDate): void {
+                $outer->where(function (Builder $recurring) use ($rangeEndUtc, $rangeStartDate, $rangeEndDate): void {
+                    $recurring->whereNotNull('recurrence_rule')
+                        ->where('recurrence_rule', '!=', '')
+                        ->where(function (Builder $until) use ($rangeStartDate): void {
+                            $until->whereNull('recurrence_until')
+                                ->orWhere('recurrence_until', '>=', $rangeStartDate);
+                        })
+                        ->where(function (Builder $started) use ($rangeEndUtc, $rangeEndDate): void {
+                            $started->where(function (Builder $allDay) use ($rangeEndDate): void {
+                                $allDay->where('is_all_day', true)
+                                    ->where('start_date', '<=', $rangeEndDate);
+                            })->orWhere(function (Builder $timed) use ($rangeEndUtc): void {
+                                $timed->where('is_all_day', false)
+                                    ->where('starts_at', '<=', $rangeEndUtc);
+                            });
+                        });
+                })->orWhere(function (Builder $standalone) use ($rangeStartUtc, $rangeEndUtc, $rangeStartDate, $rangeEndDate): void {
+                    $standalone->where(function (Builder $noRule): void {
+                        $noRule->whereNull('recurrence_rule')
+                            ->orWhere('recurrence_rule', '');
+                    })->where(function (Builder $overlap) use ($rangeStartUtc, $rangeEndUtc, $rangeStartDate, $rangeEndDate): void {
+                        $overlap->where(function (Builder $allDay) use ($rangeStartDate, $rangeEndDate): void {
+                            $allDay->where('is_all_day', true)
+                                ->where('start_date', '<=', $rangeEndDate)
+                                ->whereRaw('COALESCE(end_date, start_date) >= ?', [$rangeStartDate]);
+                        })->orWhere(function (Builder $timed) use ($rangeStartUtc, $rangeEndUtc): void {
+                            $timed->where('is_all_day', false)
+                                ->where('starts_at', '<=', $rangeEndUtc)
+                                ->where('ends_at', '>=', $rangeStartUtc);
+                        });
+                    });
+                });
+            });
     }
 
     /**

@@ -11,6 +11,7 @@ use App\Services\Calendar\RecurrenceExpanderService;
 use App\Services\Calendar\ScheduleConflictDetector;
 use App\Services\Reminder\ReminderSynchronizer;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -42,15 +43,12 @@ class CalendarEventController extends Controller
 
         [$rangeStartLocal, $rangeEndLocal] = $this->resolveRange($view, $activeDate);
 
+        /** @var Collection<int, CalendarEvent> $rawEvents */
         $rawEvents = $user->calendarEvents()
-            ->whereNull('parent_event_id')
-            ->with([
-                'project:id,name',
-                'task:id,title,status',
-                'overrides.project:id,name',
-                'overrides.task:id,title,status',
-            ])
+            ->forDisplayRange($rangeStartLocal, $rangeEndLocal)
             ->get();
+
+        $this->expander->loadRelationsForRange($rawEvents, $rangeStartLocal, $rangeEndLocal);
 
         $occurrences = $this->expander->expand($rawEvents, $rangeStartLocal, $rangeEndLocal, $timezone);
         $occurrences = $this->conflictDetector->annotateConflicts($occurrences);

@@ -4,6 +4,7 @@ namespace App\Services\Calendar;
 
 use App\Models\CalendarEvent;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 
 class RecurrenceExpanderService
@@ -17,6 +18,44 @@ class RecurrenceExpanderService
         'FR' => 5,
         'SA' => 6,
     ];
+
+    /**
+     * Conditionally eager-load only the relations actually referenced by the filtered events.
+     *
+     * @param  EloquentCollection<int, CalendarEvent>  $events
+     */
+    public function loadRelationsForRange(
+        EloquentCollection $events,
+        CarbonImmutable $rangeStartLocal,
+        CarbonImmutable $rangeEndLocal,
+    ): void {
+        if ($events->isEmpty()) {
+            return;
+        }
+
+        if ($events->contains(fn (CalendarEvent $event): bool => $event->project_id !== null)) {
+            $events->load('project:id,name');
+        }
+
+        if ($events->contains(fn (CalendarEvent $event): bool => $event->task_id !== null)) {
+            $events->load('task:id,title,status');
+        }
+
+        $hasRecurring = $events->contains(
+            fn (CalendarEvent $event): bool => $event->recurrence_rule !== null && $event->recurrence_rule !== '',
+        );
+
+        if ($hasRecurring) {
+            $rangeStartDate = $rangeStartLocal->format('Y-m-d');
+            $rangeEndDate = $rangeEndLocal->format('Y-m-d');
+
+            $events->load([
+                'overrides' => fn ($query) => $query
+                    ->whereBetween('recurrence_id', [$rangeStartDate, $rangeEndDate])
+                    ->with(['project:id,name', 'task:id,title,status']),
+            ]);
+        }
+    }
 
     /**
      * Expand standalone and recurring events into concrete local-timezone occurrences within [rangeStartLocal, rangeEndLocal].
