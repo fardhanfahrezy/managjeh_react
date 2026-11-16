@@ -325,7 +325,9 @@ export default function Profile({
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                disabled={sendingOtp || otpCooldown.isCoolingDown}
+                                disabled={
+                                    sendingOtp || otpCooldown.isCoolingDown
+                                }
                                 onClick={handleSendOtp}
                             >
                                 {sendingOtp
