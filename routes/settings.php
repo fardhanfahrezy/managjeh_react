@@ -13,7 +13,7 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');
 
     Route::post('settings/whatsapp/send-otp', [WhatsAppVerificationController::class, 'sendOtp'])
-        ->middleware('throttle:5,1')
+        ->middleware('throttle:whatsapp-otp')
         ->name('whatsapp.send-otp');
     Route::post('settings/whatsapp/verify-otp', [WhatsAppVerificationController::class, 'verifyOtp'])
         ->middleware('throttle:10,1')
@@ -21,6 +21,9 @@ Route::middleware(['auth'])->group(function () {
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('settings/profile/export', [ProfileController::class, 'export'])
+        ->middleware('throttle:data-export')
+        ->name('profile.export');
     Route::delete('settings/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     Route::get('settings/security', [SecurityController::class, 'edit'])

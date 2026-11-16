@@ -57,6 +57,18 @@ class AppServiceProvider extends ServiceProvider
 
             return Limit::perMinute(10)->by((string) ($user !== null ? $user->id : $request->ip()));
         });
+
+        RateLimiter::for('whatsapp-otp', function (Request $request): Limit {
+            $user = $request->user();
+
+            return Limit::perMinute(5)->by((string) ($user !== null ? $user->id : $request->ip()));
+        });
+
+        RateLimiter::for('data-export', function (Request $request): Limit {
+            $user = $request->user();
+
+            return Limit::perMinute(5)->by((string) ($user !== null ? $user->id : $request->ip()));
+        });
     }
 
     /**

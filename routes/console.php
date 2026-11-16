@@ -10,3 +10,4 @@ Artisan::command('inspire', function () {
 
 Schedule::command('reminders:dispatch-due')->everyMinute();
 Schedule::command('ai-planner:generate-daily')->dailyAt('05:30');
+Schedule::command('app:prune-retention-data')->dailyAt('02:30');
