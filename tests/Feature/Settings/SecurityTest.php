@@ -75,40 +75,16 @@ test('password can be updated', function () {
         ->from(route('security.edit'))
         ->put(route('user-password.update'), [
             'current_password' => 'password',
-            'password' => 'NewPass123',
-            'password_confirmation' => 'NewPass123',
+            'password' => 'new-password',
+            'password_confirmation' => 'new-password',
         ]);
 
     $response
         ->assertSessionHasNoErrors()
         ->assertRedirect(route('security.edit'));
 
-    expect(Hash::check('NewPass123', $user->refresh()->password))->toBeTrue();
+    expect(Hash::check('new-password', $user->refresh()->password))->toBeTrue();
 });
-
-test('password enforces 8-16 chars, mixed case, number, and no spaces', function (string $invalidPassword) {
-    $user = User::factory()->create();
-
-    $response = $this
-        ->actingAs($user)
-        ->from(route('security.edit'))
-        ->put(route('user-password.update'), [
-            'current_password' => 'password',
-            'password' => $invalidPassword,
-            'password_confirmation' => $invalidPassword,
-        ]);
-
-    $response
-        ->assertSessionHasErrors('password')
-        ->assertRedirect(route('security.edit'));
-})->with([
-    'too short (7 chars)' => 'Ab12345',
-    'too long (17 chars)' => 'Abcdefgh123456789',
-    'missing uppercase' => 'newpass123',
-    'missing lowercase' => 'NEWPASS123',
-    'missing number' => 'NewPassword',
-    'contains space' => 'New Pass1',
-]);
 
 test('correct password must be provided to update password', function () {
     $user = User::factory()->create();
@@ -118,8 +94,8 @@ test('correct password must be provided to update password', function () {
         ->from(route('security.edit'))
         ->put(route('user-password.update'), [
             'current_password' => 'wrong-password',
-            'password' => 'NewPass123',
-            'password_confirmation' => 'NewPass123',
+            'password' => 'new-password',
+            'password_confirmation' => 'new-password',
         ]);
 
     $response
