@@ -7,6 +7,10 @@
             name="description"
             content="Managjeh — Personal OS Mahasiswa untuk mengelola tugas, proyek, kalender, pengingat WhatsApp, dan AI Planner harian."
         >
+        <meta name="theme-color" content="#059669">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="default">
+        <meta name="apple-mobile-web-app-title" content="Managjeh">
 
         {{-- Inline script to detect system dark mode preference and apply it immediately --}}
         <script nonce="{{ \Illuminate\Support\Facades\Vite::cspNonce() }}">
@@ -37,6 +41,7 @@
         <link rel="icon" href="/favicon.ico" sizes="any">
         <link rel="icon" href="/favicon.svg" type="image/svg+xml">
         <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+        <link rel="manifest" href="/manifest.webmanifest">
 
         @viteReactRefresh
         @vite(['resources/css/app.css', 'resources/js/app.tsx', "resources/js/pages/{$page['component']}.tsx"])
