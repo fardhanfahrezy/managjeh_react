@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Settings\AiPreferencesController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use App\Http\Controllers\Settings\WhatsAppVerificationController;
@@ -35,6 +36,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('user-password.update');
 
     Route::inertia('settings/appearance', 'settings/appearance')->name('appearance.edit');
+
+    Route::get('settings/ai', [AiPreferencesController::class, 'edit'])->name('ai-preferences.edit');
+    Route::patch('settings/ai', [AiPreferencesController::class, 'update'])->name('ai-preferences.update');
 });
 
 Route::get('.well-known/passkey-endpoints', function () {

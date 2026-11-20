@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AiChatController;
 use App\Http\Controllers\AiPlannerController;
 use App\Http\Controllers\CalendarEventController;
 use App\Http\Controllers\DashboardController;
@@ -21,6 +22,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('ai-planner.generate');
     Route::post('ai-planner/reminders/approve', [AiPlannerController::class, 'approveReminder'])
         ->name('ai-planner.approve-reminder');
+
+    Route::get('ai-chat', [AiChatController::class, 'index'])->name('ai-chat.index');
+    Route::get('ai-chat/audits', [AiChatController::class, 'audits'])->name('ai-chat.audits');
+    Route::get('ai-chat/conversations/{conversation}', [AiChatController::class, 'show'])
+        ->name('ai-chat.conversations.show');
+    Route::post('ai-chat/messages', [AiChatController::class, 'storeMessage'])
+        ->middleware('throttle:ai-chat')
+        ->name('ai-chat.messages.store');
+    Route::patch('ai-chat/conversations/{conversation}', [AiChatController::class, 'updateConversation'])
+        ->name('ai-chat.conversations.update');
+    Route::delete('ai-chat/conversations/{conversation}', [AiChatController::class, 'destroyConversation'])
+        ->name('ai-chat.conversations.destroy');
+    Route::post('ai-chat/messages/{message}/proposals/decide', [AiChatController::class, 'decideProposals'])
+        ->name('ai-chat.proposals.decide');
 });
 
 require __DIR__.'/settings.php';
