@@ -3,8 +3,22 @@
 namespace App\Providers;
 
 use App\Contracts\WhatsAppGatewayInterface;
+use App\Mcp\McpToolRegistry;
+use App\Mcp\Tools\CreateScheduleTool;
+use App\Mcp\Tools\CreateTaskTool;
+use App\Mcp\Tools\GetDailyOverviewTool;
+use App\Mcp\Tools\GetMyProjectsTool;
+use App\Mcp\Tools\GetMyTasksTool;
+use App\Mcp\Tools\GetScheduleRangeTool;
+use App\Mcp\Tools\GetTodayScheduleTool;
+use App\Mcp\Tools\GetUpcomingTasksTool;
+use App\Mcp\Tools\UpdateScheduleTool;
+use App\Mcp\Tools\UpdateTaskTool;
+use App\Services\Notifications\OutboundChannelManager;
+use App\Services\Notifications\WhatsAppOutboundChannel;
 use App\Services\WhatsApp\FonnteWhatsAppGateway;
 use App\Services\WhatsApp\HttpWhatsAppGateway;
+use App\Services\WhatsApp\MetaCloudWhatsAppGateway;
 use App\Services\WhatsApp\NullWhatsAppGateway;
 use Carbon\CarbonImmutable;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -33,6 +47,15 @@ class AppServiceProvider extends ServiceProvider
                 );
             }
 
+            if ($driver === 'meta_cloud') {
+                return new MetaCloudWhatsAppGateway(
+                    phoneNumberId: (string) config('services.whatsapp.meta_phone_number_id', ''),
+                    accessToken: (string) config('services.whatsapp.meta_access_token', ''),
+                    apiVersion: (string) config('services.whatsapp.meta_api_version', 'v21.0'),
+                    timeoutSeconds: (int) config('services.whatsapp.timeout', 10),
+                );
+            }
+
             if ($driver === 'http') {
                 return new HttpWhatsAppGateway(
                     endpoint: (string) config('services.whatsapp.endpoint', ''),
@@ -42,6 +65,27 @@ class AppServiceProvider extends ServiceProvider
             }
 
             return new NullWhatsAppGateway;
+        });
+
+        $this->app->bind(OutboundChannelManager::class, function ($app): OutboundChannelManager {
+            return new OutboundChannelManager([
+                $app->make(WhatsAppOutboundChannel::class),
+            ]);
+        });
+
+        $this->app->singleton(McpToolRegistry::class, function ($app): McpToolRegistry {
+            return new McpToolRegistry([
+                $app->make(GetMyTasksTool::class),
+                $app->make(GetUpcomingTasksTool::class),
+                $app->make(GetTodayScheduleTool::class),
+                $app->make(GetScheduleRangeTool::class),
+                $app->make(GetMyProjectsTool::class),
+                $app->make(GetDailyOverviewTool::class),
+                $app->make(CreateTaskTool::class),
+                $app->make(UpdateTaskTool::class),
+                $app->make(CreateScheduleTool::class),
+                $app->make(UpdateScheduleTool::class),
+            ]);
         });
     }
 
@@ -56,6 +100,12 @@ class AppServiceProvider extends ServiceProvider
             $user = $request->user();
 
             return Limit::perMinute(10)->by((string) ($user !== null ? $user->id : $request->ip()));
+        });
+
+        RateLimiter::for('ai-chat', function (Request $request): Limit {
+            $user = $request->user();
+
+            return Limit::perMinute(20)->by((string) ($user !== null ? $user->id : $request->ip()));
         });
 
         RateLimiter::for('whatsapp-otp', function (Request $request): Limit {
