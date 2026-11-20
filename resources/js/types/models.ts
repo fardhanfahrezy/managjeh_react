@@ -191,3 +191,92 @@ export type AiPlannerRun = {
     error_message: string | null;
     created_at: string | null;
 };
+
+export type AiTone = 'concise' | 'balanced' | 'detailed';
+
+export type AiPreferences = {
+    tone: AiTone;
+    preferred_study_start: string;
+    preferred_study_end: string;
+    default_focus_minutes: number;
+    custom_instruction: string | null;
+};
+
+export type NotificationPreferences = {
+    daily_summary_enabled: boolean;
+    daily_summary_time: string;
+    weekly_summary_enabled: boolean;
+    weekly_summary_day: number;
+    weekly_summary_time: string;
+    event_prep_enabled: boolean;
+};
+
+export type AiChatRole = 'user' | 'assistant';
+
+export type AiActionProposalStatus =
+    | 'pending'
+    | 'executed'
+    | 'rejected'
+    | 'failed'
+    | 'expired';
+
+export type AiChatToolCallSummary = {
+    tool: string;
+    type: 'read' | 'mutation_proposed' | 'mutation_invalid';
+    ok?: boolean;
+    summary?: string;
+    has_conflicts?: boolean;
+    error?: string | null;
+};
+
+export type AiActionProposal = {
+    id: number;
+    conversation_id: number;
+    ai_chat_message_id: number;
+    tool_name: string;
+    payload: Record<string, unknown>;
+    conflict_preview: ConflictWarning[];
+    status: AiActionProposalStatus;
+    is_expired: boolean;
+    expires_at: string;
+    expires_at_local: string;
+    decided_at: string | null;
+    executed_at: string | null;
+    executed_at_local: string | null;
+    target_type: string | null;
+    target_id: number | null;
+    result_summary: string | null;
+};
+
+export type AiChatConversation = {
+    id: number;
+    title: string;
+    last_message_at: string | null;
+    last_message_at_local: string | null;
+};
+
+export type AiChatMessage = {
+    id: number;
+    conversation_id: number;
+    role: AiChatRole;
+    content: string;
+    provider: string | null;
+    model: string | null;
+    tool_calls_summary: AiChatToolCallSummary[];
+    proposals: AiActionProposal[];
+    created_at: string | null;
+    created_at_local: string | null;
+};
+
+export type AiChatSendResponse = {
+    conversation: AiChatConversation;
+    user_message: AiChatMessage;
+    assistant_message: AiChatMessage;
+};
+
+export type AiProposalDecisionSummary = {
+    executed: number;
+    rejected: number;
+    failed: number;
+    expired: number;
+};

@@ -1,3 +1,5 @@
+import type { AiPreferences, NotificationPreferences } from '@/types/models';
+
 export type User = {
     id: number;
     name: string;
@@ -11,6 +13,8 @@ export type User = {
     whatsapp_enabled: boolean;
     reminder_quiet_start: string | null;
     reminder_quiet_end: string | null;
+    ai_preferences?: AiPreferences | null;
+    notification_preferences?: NotificationPreferences | null;
     created_at: string;
     updated_at: string;
     [key: string]: unknown;

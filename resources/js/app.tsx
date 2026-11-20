@@ -1,31 +1,24 @@
 import { createInertiaApp } from '@inertiajs/react';
-import { lazy, Suspense, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
+import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { initializeTheme } from '@/hooks/use-appearance';
 import AppLayout from '@/layouts/app-layout';
+import AuthLayout from '@/layouts/auth-layout';
+import SettingsLayout from '@/layouts/settings/layout';
 
-const LazyAuthLayout = lazy(() => import('@/layouts/auth-layout'));
-const LazySettingsLayout = lazy(() => import('@/layouts/settings/layout'));
-const LazyToaster = lazy(async () => {
-    const module = await import('@/components/ui/sonner');
+function ClientOnlyToaster() {
+    const [mounted, setMounted] = useState(false);
 
-    return { default: module.Toaster };
-});
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
-function AuthLayoutWrapper({ children }: { children: ReactNode }) {
-    return (
-        <Suspense fallback={null}>
-            <LazyAuthLayout>{children}</LazyAuthLayout>
-        </Suspense>
-    );
-}
+    if (!mounted) {
+        return null;
+    }
 
-function SettingsLayoutWrapper({ children }: { children: ReactNode }) {
-    return (
-        <Suspense fallback={null}>
-            <LazySettingsLayout>{children}</LazySettingsLayout>
-        </Suspense>
-    );
+    return <Toaster />;
 }
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
@@ -37,9 +30,9 @@ void createInertiaApp({
             case name === 'welcome':
                 return null;
             case name.startsWith('auth/'):
-                return AuthLayoutWrapper;
+                return AuthLayout;
             case name.startsWith('settings/'):
-                return [AppLayout, SettingsLayoutWrapper];
+                return [AppLayout, SettingsLayout];
             default:
                 return AppLayout;
         }
@@ -49,9 +42,7 @@ void createInertiaApp({
         return (
             <TooltipProvider delayDuration={0}>
                 {app}
-                <Suspense fallback={null}>
-                    <LazyToaster />
-                </Suspense>
+                <ClientOnlyToaster />
             </TooltipProvider>
         );
     },
