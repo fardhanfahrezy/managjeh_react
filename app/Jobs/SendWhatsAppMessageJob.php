@@ -2,9 +2,9 @@
 
 namespace App\Jobs;
 
-use App\Contracts\WhatsAppGatewayInterface;
 use App\Enums\ReminderStatus;
 use App\Models\Reminder;
+use App\Services\Notifications\OutboundChannelManager;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use RuntimeException;
@@ -24,7 +24,7 @@ class SendWhatsAppMessageJob implements ShouldQueue
         public int $reminderId,
     ) {}
 
-    public function handle(WhatsAppGatewayInterface $gateway): void
+    public function handle(OutboundChannelManager $channels): void
     {
         $reminder = Reminder::query()->with('user')->find($this->reminderId);
 
@@ -33,8 +33,18 @@ class SendWhatsAppMessageJob implements ShouldQueue
         }
 
         $user = $reminder->user;
+        $channel = $channels->resolve($reminder->channel);
 
-        if (! $user->canReceiveWhatsAppReminders() || $user->whatsapp_number === null) {
+        if ($channel === null) {
+            $reminder->update([
+                'status' => ReminderStatus::Cancelled,
+                'failure_reason' => sprintf('Outbound notification channel "%s" is not registered.', $reminder->channel),
+            ]);
+
+            return;
+        }
+
+        if (! $channel->canDeliverTo($user)) {
             $reminder->update([
                 'status' => ReminderStatus::Cancelled,
                 'failure_reason' => 'WhatsApp reminders are disabled or number is unverified.',
@@ -43,11 +53,7 @@ class SendWhatsAppMessageJob implements ShouldQueue
             return;
         }
 
-        $result = $gateway->sendMessage(
-            phoneNumber: $user->whatsapp_number,
-            message: $reminder->message,
-            idempotencyKey: $reminder->idempotency_key,
-        );
+        $result = $channel->send($user, $reminder);
 
         if ($result->success) {
             $reminder->update([

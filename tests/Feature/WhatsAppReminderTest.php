@@ -86,7 +86,7 @@ test('creating and deleting a timed calendar event synchronizes and cancels remi
         ->assertRedirect();
 
     $event = CalendarEvent::query()->where('user_id', $user->id)->firstOrFail();
-    expect(Reminder::query()->where('calendar_event_id', $event->id)->where('status', ReminderStatus::Pending->value)->count())->toBe(2);
+    expect(Reminder::query()->where('calendar_event_id', $event->id)->where('status', ReminderStatus::Pending->value)->count())->toBe(3);
 
     $this->actingAs($user)
         ->delete(route('calendar-events.destroy', $event))

@@ -41,6 +41,9 @@ return [
         'api_token' => env('WHATSAPP_API_TOKEN', ''),
         'fonnte_token' => env('FONNTE_TOKEN', ''),
         'fonnte_endpoint' => env('FONNTE_API_ENDPOINT', 'https://api.fonnte.com/send'),
+        'meta_phone_number_id' => env('WHATSAPP_META_PHONE_NUMBER_ID', ''),
+        'meta_access_token' => env('WHATSAPP_META_ACCESS_TOKEN', ''),
+        'meta_api_version' => env('WHATSAPP_META_API_VERSION', 'v21.0'),
         'timeout' => (int) env('WHATSAPP_TIMEOUT', 10),
     ],
 
