@@ -1,11 +1,12 @@
 import { Form, Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { Download } from 'lucide-react';
+import { Download, WifiOff } from 'lucide-react';
 import { useState } from 'react';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import WhatsAppVerificationController from '@/actions/App/Http/Controllers/Settings/WhatsAppVerificationController';
 import DeleteUser from '@/components/delete-user';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
+import { useOffline } from '@/components/offline/offline-provider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,6 +30,7 @@ export default function Profile({
     timezones?: string[];
 }) {
     const { auth } = usePage<PageProps>().props;
+    const { isOnline } = useOffline();
     const isWhatsAppVerified = auth.user.whatsapp_verified_at !== null;
     const quietStart = (auth.user.reminder_quiet_start ?? '00:00').slice(0, 5);
     const quietEnd = (auth.user.reminder_quiet_end ?? '05:00').slice(0, 5);
@@ -76,6 +78,22 @@ export default function Profile({
             <h1 className="sr-only">Profile settings</h1>
 
             <div className="space-y-6">
+                {!isOnline && (
+                    <div
+                        role="status"
+                        className="flex items-start gap-2.5 rounded-lg border border-amber-300 bg-amber-50/70 px-3.5 py-2.5 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
+                    >
+                        <WifiOff
+                            className="mt-0.5 size-4 shrink-0 text-amber-600"
+                            aria-hidden="true"
+                        />
+                        <span>
+                            Perubahan profil, verifikasi OTP WhatsApp, dan
+                            ekspor data membutuhkan koneksi internet.
+                        </span>
+                    </div>
+                )}
+
                 <Heading
                     variant="small"
                     title="Profile"
@@ -296,7 +314,7 @@ export default function Profile({
 
                             <div className="flex items-center gap-4">
                                 <Button
-                                    disabled={processing}
+                                    disabled={!isOnline || processing}
                                     data-test="update-profile-button"
                                 >
                                     Save
@@ -326,7 +344,9 @@ export default function Profile({
                                 variant="outline"
                                 size="sm"
                                 disabled={
-                                    sendingOtp || otpCooldown.isCoolingDown
+                                    !isOnline ||
+                                    sendingOtp ||
+                                    otpCooldown.isCoolingDown
                                 }
                                 onClick={handleSendOtp}
                             >
@@ -373,6 +393,7 @@ export default function Profile({
                                 type="submit"
                                 size="sm"
                                 disabled={
+                                    !isOnline ||
                                     otpForm.processing ||
                                     otpForm.data.otp.length !== 6
                                 }

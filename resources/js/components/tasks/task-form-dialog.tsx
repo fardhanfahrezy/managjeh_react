@@ -1,8 +1,10 @@
 import { router, useForm } from '@inertiajs/react';
 import { Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import TaskController from '@/actions/App/Http/Controllers/TaskController';
 import InputError from '@/components/input-error';
+import { useOffline } from '@/components/offline/offline-provider';
 import {
     TASK_PRIORITY_LABELS,
     TASK_STATUS_LABELS,
@@ -46,6 +48,9 @@ export function TaskFormDialog({
     const isEditing = task !== null;
     const [subtaskTitle, setSubtaskTitle] = useState('');
     const [submittingSubtask, setSubmittingSubtask] = useState(false);
+    const [localSaving, setLocalSaving] = useState(false);
+    const { repositories, lease, isOnline, notifyLocalMutation } = useOffline();
+    const timezone = lease?.timezone || 'Asia/Jakarta';
 
     const form = useForm<{
         title: string;
@@ -92,8 +97,93 @@ export function TaskFormDialog({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, task?.id, defaultProjectId]);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const resolveProjectUuid = async (
+        projectIdStr: string,
+    ): Promise<string | null> => {
+        if (!projectIdStr || !repositories) {
+            return null;
+        }
+        const projectIdNum = Number(projectIdStr);
+        const match = projects.find((p) => p.id === projectIdNum);
+        if (match?.uuid) {
+            return match.uuid;
+        }
+        return (
+            (await repositories.projects.getByServerId(projectIdNum))?.uuid ??
+            null
+        );
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (repositories) {
+            setLocalSaving(true);
+            try {
+                const projectUuid = await resolveProjectUuid(
+                    form.data.project_id,
+                );
+
+                if (isEditing && task) {
+                    const targetUuid =
+                        task.uuid ??
+                        (await repositories.tasks.getByServerId(task.id))?.uuid;
+                    if (targetUuid) {
+                        await repositories.tasks.updateTask(
+                            targetUuid,
+                            {
+                                title: form.data.title,
+                                description: form.data.description || null,
+                                status: form.data.status,
+                                priority: form.data.priority,
+                                project_uuid: projectUuid,
+                                due_at_local: form.data.due_at || null,
+                            },
+                            timezone,
+                        );
+                        notifyLocalMutation();
+                        toast.success(
+                            isOnline
+                                ? 'Tugas diperbarui.'
+                                : 'Perubahan tugas disimpan di perangkat.',
+                        );
+                        onOpenChange(false);
+                        setLocalSaving(false);
+                        return;
+                    }
+                } else {
+                    await repositories.tasks.createTask(
+                        {
+                            title: form.data.title,
+                            description: form.data.description || null,
+                            status: form.data.status,
+                            priority: form.data.priority,
+                            project_uuid: projectUuid,
+                            due_at_local: form.data.due_at || null,
+                        },
+                        timezone,
+                    );
+                    notifyLocalMutation();
+                    toast.success(
+                        isOnline
+                            ? 'Tugas ditambahkan.'
+                            : 'Tugas disimpan di perangkat (offline).',
+                    );
+                    onOpenChange(false);
+                    setLocalSaving(false);
+                    return;
+                }
+            } catch (err) {
+                toast.error(
+                    err instanceof Error
+                        ? err.message
+                        : 'Gagal menyimpan tugas secara lokal.',
+                );
+                setLocalSaving(false);
+                return;
+            }
+            setLocalSaving(false);
+        }
 
         const payload = {
             ...form.data,
@@ -119,13 +209,55 @@ export function TaskFormDialog({
         }
     };
 
-    const handleAddSubtask = (e: React.FormEvent) => {
+    const handleAddSubtask = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!task || subtaskTitle.trim() === '') {
             return;
         }
 
         setSubmittingSubtask(true);
+
+        if (repositories) {
+            try {
+                const parentUuid =
+                    task.uuid ??
+                    (await repositories.tasks.getByServerId(task.id))?.uuid;
+                if (parentUuid) {
+                    const projectUuid =
+                        task.project_uuid ??
+                        (task.project_id
+                            ? ((
+                                  await repositories.projects.getByServerId(
+                                      task.project_id,
+                                  )
+                              )?.uuid ?? null)
+                            : null);
+                    await repositories.tasks.createTask(
+                        {
+                            title: subtaskTitle.trim(),
+                            parent_uuid: parentUuid,
+                            project_uuid: projectUuid,
+                            status: 'todo',
+                            priority: task.priority,
+                        },
+                        timezone,
+                    );
+                    setSubtaskTitle('');
+                    notifyLocalMutation();
+                    setSubmittingSubtask(false);
+                    return;
+                }
+            } catch (err) {
+                toast.error(
+                    err instanceof Error
+                        ? err.message
+                        : 'Gagal menambahkan subtugas.',
+                );
+                setSubmittingSubtask(false);
+                return;
+            }
+        }
+
         router.post(
             TaskController.store.url(),
             {
@@ -143,9 +275,24 @@ export function TaskFormDialog({
         );
     };
 
-    const handleToggleSubtask = (subtask: Task) => {
+    const handleToggleSubtask = async (subtask: Task) => {
         const nextStatus: TaskStatus =
             subtask.status === 'completed' ? 'todo' : 'completed';
+
+        if (repositories) {
+            const subUuid =
+                subtask.uuid ??
+                (await repositories.tasks.getByServerId(subtask.id))?.uuid;
+            if (subUuid) {
+                await repositories.tasks.updateTask(
+                    subUuid,
+                    { status: nextStatus },
+                    timezone,
+                );
+                notifyLocalMutation();
+                return;
+            }
+        }
 
         router.patch(
             TaskController.update.url(subtask.id),
@@ -154,8 +301,19 @@ export function TaskFormDialog({
         );
     };
 
-    const handleDeleteSubtask = (subtaskId: number) => {
-        router.delete(TaskController.destroy.url(subtaskId), {
+    const handleDeleteSubtask = async (subtask: Task) => {
+        if (repositories) {
+            const subUuid =
+                subtask.uuid ??
+                (await repositories.tasks.getByServerId(subtask.id))?.uuid;
+            if (subUuid) {
+                await repositories.tasks.deleteLocal(subUuid);
+                notifyLocalMutation();
+                return;
+            }
+        }
+
+        router.delete(TaskController.destroy.url(subtask.id), {
             preserveScroll: true,
         });
     };
@@ -331,8 +489,11 @@ export function TaskFormDialog({
                         >
                             Batal
                         </Button>
-                        <Button type="submit" disabled={form.processing}>
-                            {form.processing
+                        <Button
+                            type="submit"
+                            disabled={form.processing || localSaving}
+                        >
+                            {form.processing || localSaving
                                 ? 'Menyimpan...'
                                 : isEditing
                                   ? 'Simpan Perubahan'
@@ -385,7 +546,7 @@ export function TaskFormDialog({
                                             size="icon"
                                             className="size-7 shrink-0 text-muted-foreground hover:text-destructive"
                                             onClick={() =>
-                                                handleDeleteSubtask(sub.id)
+                                                void handleDeleteSubtask(sub)
                                             }
                                             aria-label={`Hapus subtugas ${sub.title}`}
                                         >

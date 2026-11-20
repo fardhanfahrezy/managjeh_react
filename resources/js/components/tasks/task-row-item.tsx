@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import TaskController from '@/actions/App/Http/Controllers/TaskController';
+import { useOffline } from '@/components/offline/offline-provider';
 import {
     formatDueAtDisplay,
     getTaskUrgencyBucket,
@@ -45,6 +46,7 @@ export function TaskRowItem({
 }: TaskRowItemProps) {
     const [expanded, setExpanded] = useState(false);
     const [updating, setUpdating] = useState(false);
+    const { repositories, notifyLocalMutation } = useOffline();
 
     const subtasks = task.subtasks ?? [];
     const completedSubtasks = subtasks.filter(
@@ -54,12 +56,30 @@ export function TaskRowItem({
     const isCancelled = task.status === 'cancelled';
     const urgency = getTaskUrgencyBucket(task, timezone);
 
-    const patchTask = (
-        taskId: number,
+    const patchTask = async (
+        targetTask: Task,
         data: Partial<{ status: TaskStatus; priority: TaskPriority }>,
     ) => {
         setUpdating(true);
-        router.patch(TaskController.update.url(taskId), data, {
+
+        if (repositories) {
+            try {
+                const uuid =
+                    targetTask.uuid ??
+                    (await repositories.tasks.getByServerId(targetTask.id))
+                        ?.uuid;
+                if (uuid) {
+                    await repositories.tasks.updateTask(uuid, data, timezone);
+                    notifyLocalMutation();
+                    setUpdating(false);
+                    return;
+                }
+            } catch {
+                // Fall back to Inertia if record not yet in IndexedDB.
+            }
+        }
+
+        router.patch(TaskController.update.url(targetTask.id), data, {
             preserveScroll: true,
             onFinish: () => setUpdating(false),
         });
@@ -77,7 +97,7 @@ export function TaskRowItem({
                     <Checkbox
                         checked={isCompleted}
                         onCheckedChange={(checked) =>
-                            patchTask(task.id, {
+                            void patchTask(task, {
                                 status: checked ? 'completed' : 'todo',
                             })
                         }
@@ -146,7 +166,7 @@ export function TaskRowItem({
                     <Select
                         value={task.priority}
                         onValueChange={(value) =>
-                            patchTask(task.id, {
+                            void patchTask(task, {
                                 priority: value as TaskPriority,
                             })
                         }
@@ -184,7 +204,7 @@ export function TaskRowItem({
                     <Select
                         value={task.status}
                         onValueChange={(value) =>
-                            patchTask(task.id, {
+                            void patchTask(task, {
                                 status: value as TaskStatus,
                             })
                         }
@@ -231,7 +251,7 @@ export function TaskRowItem({
                                     <Checkbox
                                         checked={sub.status === 'completed'}
                                         onCheckedChange={(checked) =>
-                                            patchTask(sub.id, {
+                                            void patchTask(sub, {
                                                 status: checked
                                                     ? 'completed'
                                                     : 'todo',

@@ -1,8 +1,10 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { ArrowLeft, Calendar, CheckCircle2, Plus, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import ProjectController from '@/actions/App/Http/Controllers/ProjectController';
 import TaskController from '@/actions/App/Http/Controllers/TaskController';
+import { useOffline } from '@/components/offline/offline-provider';
 import {
     formatDateDisplay,
     PROJECT_STATUS_BADGE_CLASS,
@@ -33,9 +35,79 @@ type PageSharedProps = {
     auth: Auth;
 };
 
-export default function ProjectShow({ project, projects }: ProjectShowProps) {
-    const { auth } = usePage<PageSharedProps>().props;
-    const timezone = auth.user.timezone || 'Asia/Jakarta';
+export default function ProjectShow({
+    project: serverProject,
+    projects: serverProjects,
+}: ProjectShowProps) {
+    const pageProps = usePage<Partial<PageSharedProps>>().props;
+    const {
+        repositories,
+        lease,
+        hydratedFromServer,
+        isOnline,
+        dataVersion,
+        notifyLocalMutation,
+        navigateOffline,
+    } = useOffline();
+    const timezone =
+        pageProps.auth?.user?.timezone || lease?.timezone || 'Asia/Jakarta';
+
+    const [localProject, setLocalProject] = useState<Project | null>(null);
+    const [localProjects, setLocalProjects] = useState<ProjectSummary[] | null>(
+        null,
+    );
+
+    useEffect(() => {
+        if (!repositories || (!hydratedFromServer && isOnline)) {
+            return;
+        }
+
+        let cancelled = false;
+        async function loadLocal() {
+            const list = await repositories!.projects.listWithProgress();
+            const found = list.find(
+                (p) =>
+                    (serverProject.uuid && p.uuid === serverProject.uuid) ||
+                    p.id === serverProject.id,
+            );
+            const summaries: ProjectSummary[] = list.map((p) => ({
+                id: p.id,
+                uuid: p.uuid,
+                name: p.name,
+                status: p.status,
+            }));
+
+            if (found?.uuid) {
+                const projectTasks =
+                    await repositories!.tasks.listRootTasksForUi(timezone, {
+                        projectUuid: found.uuid,
+                    });
+                if (!cancelled) {
+                    setLocalProject({ ...found, tasks: projectTasks });
+                    setLocalProjects(summaries);
+                }
+            } else if (!cancelled) {
+                setLocalProjects(summaries);
+            }
+        }
+
+        void loadLocal();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        repositories,
+        hydratedFromServer,
+        isOnline,
+        dataVersion,
+        serverProject.id,
+        serverProject.uuid,
+        timezone,
+    ]);
+
+    const project = localProject ?? serverProject;
+    const projects = localProjects ?? serverProjects;
 
     const [taskDialogOpen, setTaskDialogOpen] = useState(false);
     const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -44,9 +116,35 @@ export default function ProjectShow({ project, projects }: ProjectShowProps) {
 
     const tasks = project.tasks ?? [];
 
-    const handleConfirmDeleteTask = () => {
+    const liveEditingTask = useMemo(() => {
+        if (!editingTask) {
+            return null;
+        }
+        return (
+            tasks.find(
+                (t) =>
+                    (editingTask.uuid && t.uuid === editingTask.uuid) ||
+                    t.id === editingTask.id,
+            ) ?? editingTask
+        );
+    }, [editingTask, tasks]);
+
+    const handleConfirmDeleteTask = async () => {
         if (!deletingTask) {
             return;
+        }
+
+        if (repositories) {
+            const uuid =
+                deletingTask.uuid ??
+                (await repositories.tasks.getByServerId(deletingTask.id))?.uuid;
+            if (uuid) {
+                await repositories.tasks.deleteLocal(uuid);
+                notifyLocalMutation();
+                setDeletingTask(null);
+                toast.success('Tugas berhasil dihapus.');
+                return;
+            }
         }
 
         router.delete(TaskController.destroy.url(deletingTask.id), {
@@ -55,7 +153,21 @@ export default function ProjectShow({ project, projects }: ProjectShowProps) {
         });
     };
 
-    const handleConfirmDeleteProject = () => {
+    const handleConfirmDeleteProject = async () => {
+        if (repositories) {
+            const uuid =
+                project.uuid ??
+                (await repositories.projects.getByServerId(project.id))?.uuid;
+            if (uuid) {
+                await repositories.projects.deleteLocal(uuid);
+                notifyLocalMutation();
+                setConfirmDeleteProject(false);
+                toast.success('Project berhasil dihapus.');
+                navigateOffline(projectsIndex.url());
+                return;
+            }
+        }
+
         router.delete(ProjectController.destroy.url(project.id));
     };
 
@@ -206,7 +318,7 @@ export default function ProjectShow({ project, projects }: ProjectShowProps) {
             <TaskFormDialog
                 open={taskDialogOpen}
                 onOpenChange={setTaskDialogOpen}
-                task={editingTask}
+                task={liveEditingTask}
                 projects={projects}
                 defaultProjectId={project.id}
             />

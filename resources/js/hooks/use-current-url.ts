@@ -1,5 +1,6 @@
 import type { InertiaLinkProps } from '@inertiajs/react';
 import { usePage } from '@inertiajs/react';
+import { useOffline } from '@/components/offline/offline-provider';
 import { toUrl } from '@/lib/utils';
 
 export type IsCurrentUrlFn = (
@@ -28,8 +29,10 @@ export type UseCurrentUrlReturn = {
 
 export function useCurrentUrl(): UseCurrentUrlReturn {
     const page = usePage();
+    const { offlineRoute } = useOffline();
+    const rawUrl = offlineRoute ?? page.url;
     const currentUrlPath = new URL(
-        page.url,
+        rawUrl,
         typeof window !== 'undefined'
             ? window.location.origin
             : 'http://localhost',

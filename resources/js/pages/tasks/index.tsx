@@ -6,9 +6,11 @@ import {
     Plus,
     RotateCcw,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import TaskController from '@/actions/App/Http/Controllers/TaskController';
 import InputError from '@/components/input-error';
+import { useOffline } from '@/components/offline/offline-provider';
 import {
     getTaskUrgencyBucket,
     TASK_PRIORITY_LABELS,
@@ -81,12 +83,90 @@ const GROUP_META: Record<
 };
 
 export default function TasksIndex({
-    tasks,
-    projects,
-    filters,
+    tasks: serverTasks,
+    projects: serverProjects,
+    filters: serverFilters,
 }: TasksPageProps) {
-    const { auth } = usePage<PageSharedProps>().props;
-    const timezone = auth.user.timezone || 'Asia/Jakarta';
+    const pageProps = usePage<Partial<PageSharedProps>>().props;
+    const {
+        repositories,
+        lease,
+        hydratedFromServer,
+        isOnline,
+        dataVersion,
+        notifyLocalMutation,
+    } = useOffline();
+    const timezone =
+        pageProps.auth?.user?.timezone || lease?.timezone || 'Asia/Jakarta';
+
+    const [activeFilters, setActiveFilters] = useState(serverFilters);
+    const [localTasks, setLocalTasks] = useState<Task[] | null>(null);
+    const [localProjects, setLocalProjects] = useState<ProjectSummary[] | null>(
+        null,
+    );
+
+    useEffect(() => {
+        setActiveFilters(serverFilters);
+    }, [serverFilters]);
+
+    const filters = activeFilters;
+
+    useEffect(() => {
+        if (!repositories || (!hydratedFromServer && isOnline)) {
+            return;
+        }
+
+        let cancelled = false;
+        async function loadLocal() {
+            const projList = await repositories!.projects.listWithProgress();
+            const summaries: ProjectSummary[] = projList.map((p) => ({
+                id: p.id,
+                uuid: p.uuid,
+                name: p.name,
+                status: p.status,
+            }));
+
+            let projectUuidFilter = '';
+            if (filters.project_id) {
+                const match = summaries.find(
+                    (p) => String(p.id) === filters.project_id,
+                );
+                projectUuidFilter = match?.uuid ?? '';
+            }
+
+            const taskList = await repositories!.tasks.listRootTasksForUi(
+                timezone,
+                {
+                    status: (filters.status || '') as TaskStatus | '',
+                    priority: (filters.priority || '') as TaskPriority | '',
+                    projectUuid: projectUuidFilter,
+                },
+            );
+
+            if (!cancelled) {
+                setLocalProjects(summaries);
+                setLocalTasks(taskList);
+            }
+        }
+
+        void loadLocal();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        repositories,
+        hydratedFromServer,
+        isOnline,
+        dataVersion,
+        timezone,
+        filters.status,
+        filters.priority,
+        filters.project_id,
+    ]);
+
+    const tasks = localTasks ?? serverTasks;
+    const projects = localProjects ?? serverProjects;
 
     const [formOpen, setFormOpen] = useState(false);
     const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -94,6 +174,20 @@ export default function TasksIndex({
     const [showClosed, setShowClosed] = useState(
         filters.status === 'completed' || filters.status === 'cancelled',
     );
+
+    // Keep editingTask synced with latest subtasks from IndexedDB while dialog is open.
+    const liveEditingTask = useMemo(() => {
+        if (!editingTask) {
+            return null;
+        }
+        return (
+            tasks.find(
+                (t) =>
+                    (editingTask.uuid && t.uuid === editingTask.uuid) ||
+                    t.id === editingTask.id,
+            ) ?? editingTask
+        );
+    }, [editingTask, tasks]);
 
     const quickAdd = useForm<{
         title: string;
@@ -139,6 +233,12 @@ export default function TasksIndex({
             [key]: value === 'all' ? '' : value,
         };
 
+        setActiveFilters(nextFilters);
+
+        if (!isOnline || hydratedFromServer) {
+            return;
+        }
+
         const query: Record<string, string> = {};
         if (nextFilters.status) {
             query.status = nextFilters.status;
@@ -157,13 +257,63 @@ export default function TasksIndex({
     };
 
     const resetFilters = () => {
+        setActiveFilters({
+            status: '',
+            priority: '',
+            project_id: '',
+            due_date: '',
+        });
+
+        if (!isOnline || hydratedFromServer) {
+            return;
+        }
+
         router.get(tasksIndex.url(), {}, { preserveState: true });
     };
 
-    const handleQuickAdd = (e: React.FormEvent) => {
+    const handleQuickAdd = async (e: React.FormEvent) => {
         e.preventDefault();
         if (quickAdd.data.title.trim() === '') {
             return;
+        }
+
+        if (repositories) {
+            try {
+                let projectUuid: string | null = null;
+                if (quickAdd.data.project_id !== '') {
+                    const projId = Number(quickAdd.data.project_id);
+                    const matched = projects.find((p) => p.id === projId);
+                    projectUuid =
+                        matched?.uuid ??
+                        (await repositories.projects.getByServerId(projId))
+                            ?.uuid ??
+                        null;
+                }
+
+                await repositories.tasks.createTask(
+                    {
+                        title: quickAdd.data.title.trim(),
+                        project_uuid: projectUuid,
+                        due_at_local: quickAdd.data.due_at || null,
+                    },
+                    timezone,
+                );
+                quickAdd.reset('title', 'due_at');
+                notifyLocalMutation();
+                toast.success(
+                    isOnline
+                        ? 'Tugas berhasil ditambahkan.'
+                        : 'Tugas tersimpan di perangkat (offline).',
+                );
+                return;
+            } catch (err) {
+                toast.error(
+                    err instanceof Error
+                        ? err.message
+                        : 'Gagal menambahkan tugas.',
+                );
+                return;
+            }
         }
 
         quickAdd.transform((data) => ({
@@ -180,9 +330,26 @@ export default function TasksIndex({
         });
     };
 
-    const handleConfirmDelete = () => {
+    const handleConfirmDelete = async () => {
         if (!deletingTask) {
             return;
+        }
+
+        if (repositories) {
+            const uuid =
+                deletingTask.uuid ??
+                (await repositories.tasks.getByServerId(deletingTask.id))?.uuid;
+            if (uuid) {
+                await repositories.tasks.deleteLocal(uuid);
+                notifyLocalMutation();
+                setDeletingTask(null);
+                toast.success(
+                    isOnline
+                        ? 'Tugas berhasil dihapus.'
+                        : 'Tugas dihapus dari perangkat (akan disinkronkan saat online).',
+                );
+                return;
+            }
         }
 
         router.delete(TaskController.destroy.url(deletingTask.id), {
@@ -520,7 +687,7 @@ export default function TasksIndex({
             <TaskFormDialog
                 open={formOpen}
                 onOpenChange={setFormOpen}
-                task={editingTask}
+                task={liveEditingTask}
                 projects={projects}
                 defaultProjectId={
                     filters.project_id ? Number(filters.project_id) : null

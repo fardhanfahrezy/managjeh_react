@@ -12,8 +12,10 @@ import {
     Repeat,
     Sparkles,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import TaskController from '@/actions/App/Http/Controllers/TaskController';
+import { useOffline } from '@/components/offline/offline-provider';
 import {
     formatDateDisplay,
     formatDueAtDisplay,
@@ -22,6 +24,7 @@ import {
 } from '@/components/tasks/task-constants';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { buildLocalDashboardData } from '@/lib/offline/dashboard/local-dashboard-aggregator';
 import { dashboard } from '@/routes';
 import { index as calendarIndex } from '@/routes/calendar';
 import { edit as profileEdit } from '@/routes/profile';
@@ -32,24 +35,80 @@ import {
 import { index as tasksIndex } from '@/routes/tasks';
 import type { DashboardData, DashboardTaskItem } from '@/types/models';
 
-export default function Dashboard({
-    greeting,
-    local_date_label,
-    timezone,
-    today_tasks,
-    upcoming_tasks,
-    today_events,
-    active_projects,
-    ai_priorities,
-    whatsapp_status,
-    completed_summary,
-}: DashboardData) {
+export default function Dashboard(serverProps: DashboardData) {
+    const {
+        db,
+        lease,
+        repositories,
+        hydratedFromServer,
+        isOnline,
+        dataVersion,
+        notifyLocalMutation,
+    } = useOffline();
+
+    const [localData, setLocalData] = useState<DashboardData | null>(null);
     const [completingTaskId, setCompletingTaskId] = useState<number | null>(
         null,
     );
 
-    const handleCompleteTask = (task: DashboardTaskItem) => {
+    useEffect(() => {
+        if (!db || !lease || (!hydratedFromServer && isOnline)) {
+            return;
+        }
+
+        let cancelled = false;
+        void buildLocalDashboardData(db, lease).then((computed) => {
+            if (!cancelled) {
+                setLocalData(computed);
+            }
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [db, lease, hydratedFromServer, isOnline, dataVersion]);
+
+    const {
+        greeting,
+        local_date_label,
+        timezone,
+        today_tasks,
+        upcoming_tasks,
+        today_events,
+        active_projects,
+        ai_priorities,
+        whatsapp_status,
+        completed_summary,
+    } = localData ?? serverProps;
+
+    const handleCompleteTask = async (task: DashboardTaskItem) => {
         setCompletingTaskId(task.id);
+
+        if (repositories) {
+            try {
+                const targetUuid =
+                    task.uuid ??
+                    (await repositories.tasks.getByServerId(task.id))?.uuid;
+                if (targetUuid) {
+                    await repositories.tasks.updateTask(
+                        targetUuid,
+                        { status: 'completed' },
+                        timezone,
+                    );
+                    notifyLocalMutation();
+                    toast.success(
+                        isOnline
+                            ? 'Tugas ditandai selesai.'
+                            : 'Tersimpan di perangkat (akan disinkronkan saat online).',
+                    );
+                    setCompletingTaskId(null);
+                    return;
+                }
+            } catch {
+                // Fall back to online Inertia request if local lookup misses.
+            }
+        }
+
         router.patch(
             TaskController.update.url(task.id),
             { status: 'completed' },

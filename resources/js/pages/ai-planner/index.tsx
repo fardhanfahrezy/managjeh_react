@@ -4,15 +4,20 @@ import {
     BellPlus,
     Check,
     Clock,
+    Cpu,
     RefreshCw,
     Sparkles,
+    WifiOff,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import AiPlannerController from '@/actions/App/Http/Controllers/AiPlannerController';
+import { useOffline } from '@/components/offline/offline-provider';
 import { formatDateDisplay } from '@/components/tasks/task-constants';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useRateLimitCooldown } from '@/hooks/use-rate-limit-cooldown';
+import { generateLocalOfflinePlan } from '@/lib/offline/planner/local-priority-planner';
 import { index as aiPlannerIndex } from '@/routes/ai-planner';
 import { index as tasksIndex } from '@/routes/tasks';
 import type {
@@ -32,23 +37,64 @@ const PROVIDER_LABELS: Record<string, string> = {
     grok: 'Grok',
     openrouter: 'OpenRouter',
     fallback: 'Fallback Deterministik',
+    'local-offline': 'Prioritas Lokal (Offline)',
 };
 
 export default function AiPlannerIndex({
     planning_date,
     timezone,
-    latest_run,
+    latest_run: serverLatestRun,
     recent_runs,
 }: Props) {
+    const { db, isOnline } = useOffline();
+    const [cachedRun, setCachedRun] = useState<AiPlannerRun | null>(null);
     const [generating, setGenerating] = useState(false);
+    const [generatingLocal, setGeneratingLocal] = useState(false);
     const [approvingKey, setApprovingKey] = useState<string | null>(null);
     const [approvedKeys, setApprovedKeys] = useState<Record<string, boolean>>(
         {},
     );
     const generateCooldown = useRateLimitCooldown();
 
+    // Persist server run snapshot locally and hydrate from snapshot when offline (`D-25`).
+    useEffect(() => {
+        if (!db) {
+            return;
+        }
+        if (serverLatestRun) {
+            void db.cached_snapshots.put({
+                key: 'ai_planner_latest',
+                payload: serverLatestRun,
+                updated_at: new Date().toISOString(),
+            });
+            return;
+        }
+
+        void db.cached_snapshots.get('ai_planner_latest').then((snap) => {
+            if (snap?.payload) {
+                setCachedRun(snap.payload as AiPlannerRun);
+            }
+        });
+    }, [db, serverLatestRun]);
+
+    const latest_run = cachedRun ?? serverLatestRun;
+
+    const handleGenerateLocalOffline = async () => {
+        if (!db) {
+            return;
+        }
+        setGeneratingLocal(true);
+        try {
+            const localRun = await generateLocalOfflinePlan(db, timezone);
+            setCachedRun(localRun);
+            toast.success('Prioritas lokal (offline) berhasil disusun.');
+        } finally {
+            setGeneratingLocal(false);
+        }
+    };
+
     const handleGenerate = () => {
-        if (generateCooldown.isCoolingDown) {
+        if (!isOnline || generateCooldown.isCoolingDown) {
             return;
         }
 
@@ -58,7 +104,10 @@ export default function AiPlannerIndex({
             {},
             {
                 preserveScroll: true,
-                onSuccess: () => generateCooldown.clearRateLimit(),
+                onSuccess: () => {
+                    setCachedRun(null);
+                    generateCooldown.clearRateLimit();
+                },
                 onHttpException: generateCooldown.handleHttpException,
                 onFinish: () => setGenerating(false),
             },
@@ -66,6 +115,12 @@ export default function AiPlannerIndex({
     };
 
     const handleApproveReminder = (item: AiPlannerRecommendedReminder) => {
+        if (!isOnline) {
+            toast.error(
+                'Persetujuan pengingat WhatsApp membutuhkan koneksi internet.',
+            );
+            return;
+        }
         const key = `${item.task_id}-${item.remind_at_local}`;
         setApprovingKey(key);
 
@@ -123,24 +178,46 @@ export default function AiPlannerIndex({
                     </div>
 
                     <div className="flex flex-col items-start gap-1.5 sm:items-end">
-                        <Button
-                            type="button"
-                            disabled={
-                                generating || generateCooldown.isCoolingDown
-                            }
-                            onClick={handleGenerate}
-                        >
-                            <RefreshCw
-                                className={`size-4 ${generating ? 'animate-spin' : ''}`}
-                            />
-                            {generating
-                                ? 'Menyusun Rencana...'
-                                : generateCooldown.isCoolingDown
-                                  ? `Tunggu ${generateCooldown.cooldownSeconds} dtk`
-                                  : latest_run
-                                    ? 'Perbarui Rencana Hari Ini'
-                                    : 'Generate Rencana Hari Ini'}
-                        </Button>
+                        <div className="flex flex-wrap items-center gap-2">
+                            {!isOnline && (
+                                <Button
+                                    type="button"
+                                    variant="default"
+                                    disabled={generatingLocal || !db}
+                                    onClick={() =>
+                                        void handleGenerateLocalOffline()
+                                    }
+                                >
+                                    <Cpu className="size-4" />
+                                    {generatingLocal
+                                        ? 'Menyusun...'
+                                        : 'Susun Prioritas Lokal (Offline)'}
+                                </Button>
+                            )}
+                            <Button
+                                type="button"
+                                variant={isOnline ? 'default' : 'outline'}
+                                disabled={
+                                    !isOnline ||
+                                    generating ||
+                                    generateCooldown.isCoolingDown
+                                }
+                                onClick={handleGenerate}
+                            >
+                                <RefreshCw
+                                    className={`size-4 ${generating ? 'animate-spin' : ''}`}
+                                />
+                                {!isOnline
+                                    ? 'AI Cloud (Butuh Internet)'
+                                    : generating
+                                      ? 'Menyusun Rencana...'
+                                      : generateCooldown.isCoolingDown
+                                        ? `Tunggu ${generateCooldown.cooldownSeconds} dtk`
+                                        : latest_run
+                                          ? 'Perbarui Rencana Hari Ini'
+                                          : 'Generate Rencana Hari Ini'}
+                            </Button>
+                        </div>
                         {generateCooldown.rateLimitMessage && (
                             <p
                                 role="status"
@@ -152,6 +229,26 @@ export default function AiPlannerIndex({
                         )}
                     </div>
                 </div>
+
+                {!isOnline && (
+                    <div
+                        role="status"
+                        className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50/70 px-4 py-3 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
+                    >
+                        <WifiOff
+                            className="mt-0.5 size-4 shrink-0 text-amber-600"
+                            aria-hidden="true"
+                        />
+                        <p>
+                            Mode Offline: menampilkan rencana terakhir yang
+                            tersimpan di perangkat. Pemanggilan AI cloud dan
+                            penjadwalan pengingat WhatsApp membutuhkan koneksi
+                            internet; gunakan{' '}
+                            <strong>Susun Prioritas Lokal (Offline)</strong>{' '}
+                            untuk menyusun urutan tugas berdasarkan data lokal.
+                        </p>
+                    </div>
+                )}
 
                 {/* Warnings Banner */}
                 {warnings.length > 0 && (
@@ -320,6 +417,7 @@ export default function AiPlannerIndex({
                                                                         : 'default'
                                                                 }
                                                                 disabled={
+                                                                    !isOnline ||
                                                                     isApproved ||
                                                                     approvingKey ===
                                                                         key

@@ -9,8 +9,15 @@ import {
     Repeat,
     Trash2,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import CalendarEventController from '@/actions/App/Http/Controllers/CalendarEventController';
+import { useOffline } from '@/components/offline/offline-provider';
+import {
+    formatDateDisplay,
+    TASK_PRIORITY_BADGE_CLASS,
+    TASK_PRIORITY_LABELS,
+} from '@/components/tasks/task-constants';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,6 +37,14 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { findConflictsForInterval } from '@/lib/offline/calendar/schedule-conflict-detector';
+import {
+    addDaysToLocalDate,
+    formatUtcIsoToLocalDate,
+    formatUtcIsoToLocalDateTime,
+    localDateTimeToUtcIso,
+    startOfWeekMonday,
+} from '@/lib/offline/timezone';
 import { index as calendarIndex } from '@/routes/calendar';
 import type {
     CalendarEvent,
@@ -39,11 +54,6 @@ import type {
     TaskDeadlineItem,
     TaskOption,
 } from '@/types/models';
-import {
-    formatDateDisplay,
-    TASK_PRIORITY_BADGE_CLASS,
-    TASK_PRIORITY_LABELS,
-} from '@/components/tasks/task-constants';
 
 type Props = {
     view: CalendarView;
@@ -180,17 +190,177 @@ function buildRecurrenceRule(
     return `FREQ=${freq}`;
 }
 
+function computeRangeBounds(
+    view: CalendarView,
+    activeDate: string,
+): { rangeStart: string; rangeEnd: string } {
+    if (view === 'day') {
+        return { rangeStart: activeDate, rangeEnd: activeDate };
+    }
+    if (view === 'week') {
+        const start = startOfWeekMonday(activeDate);
+        return { rangeStart: start, rangeEnd: addDaysToLocalDate(start, 6) };
+    }
+    const [year, month] = activeDate.split('-').map(Number);
+    const firstOfMonth = `${year}-${String(month).padStart(2, '0')}-01`;
+    const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const lastOfMonth = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    const gridStart = startOfWeekMonday(firstOfMonth);
+    const endDow = new Date(`${lastOfMonth}T00:00:00Z`).getUTCDay();
+    const trailingDays = endDow === 0 ? 0 : 7 - endDow;
+    return {
+        rangeStart: gridStart,
+        rangeEnd: addDaysToLocalDate(lastOfMonth, trailingDays),
+    };
+}
+
 export default function CalendarIndex({
-    view,
-    active_date,
-    range_start,
-    range_end,
-    events,
-    task_deadlines,
-    projects,
-    tasks_for_select,
-    conflict_warnings,
+    view: serverView,
+    active_date: serverActiveDate,
+    range_start: serverRangeStart,
+    range_end: serverRangeEnd,
+    events: serverEvents,
+    task_deadlines: serverTaskDeadlines,
+    projects: serverProjects,
+    tasks_for_select: serverTasksForSelect,
+    conflict_warnings: serverConflictWarnings,
 }: Props) {
+    const {
+        repositories,
+        lease,
+        hydratedFromServer,
+        isOnline,
+        dataVersion,
+        notifyLocalMutation,
+    } = useOffline();
+    const timezone = lease?.timezone || 'Asia/Jakarta';
+
+    const [viewState, setViewState] = useState<CalendarView>(serverView);
+    const [activeDateState, setActiveDateState] = useState(serverActiveDate);
+    const [rangeStartState, setRangeStartState] = useState(serverRangeStart);
+    const [rangeEndState, setRangeEndState] = useState(serverRangeEnd);
+
+    const [localEvents, setLocalEvents] = useState<CalendarEvent[] | null>(
+        null,
+    );
+    const [localDeadlines, setLocalDeadlines] = useState<
+        TaskDeadlineItem[] | null
+    >(null);
+    const [localProjects, setLocalProjects] = useState<ProjectSummary[] | null>(
+        null,
+    );
+    const [localTasksSelect, setLocalTasksSelect] = useState<
+        TaskOption[] | null
+    >(null);
+    const [localConflictWarnings, setLocalConflictWarnings] = useState<
+        ConflictWarning[]
+    >([]);
+
+    useEffect(() => {
+        setViewState(serverView);
+        setActiveDateState(serverActiveDate);
+        setRangeStartState(serverRangeStart);
+        setRangeEndState(serverRangeEnd);
+    }, [serverView, serverActiveDate, serverRangeStart, serverRangeEnd]);
+
+    const view = viewState;
+    const active_date = activeDateState;
+    const range_start = rangeStartState;
+    const range_end = rangeEndState;
+
+    useEffect(() => {
+        if (!repositories || (!hydratedFromServer && isOnline)) {
+            return;
+        }
+
+        let cancelled = false;
+        async function loadLocal() {
+            const [expanded, projList, taskList] = await Promise.all([
+                repositories!.calendar.listExpandedOccurrences(
+                    range_start,
+                    range_end,
+                    timezone,
+                ),
+                repositories!.projects.listWithProgress(),
+                repositories!.tasks.listRootTasksForUi(timezone),
+            ]);
+
+            const summaries: ProjectSummary[] = projList.map((p) => ({
+                id: p.id,
+                uuid: p.uuid,
+                name: p.name,
+                status: p.status,
+            }));
+
+            const deadlines: TaskDeadlineItem[] = taskList
+                .filter((t) => {
+                    if (
+                        !t.due_at ||
+                        t.status === 'completed' ||
+                        t.status === 'cancelled'
+                    ) {
+                        return false;
+                    }
+                    const d = formatUtcIsoToLocalDate(t.due_at, timezone);
+                    return d !== null && d >= range_start && d <= range_end;
+                })
+                .map((t) => ({
+                    id: t.id,
+                    title: t.title,
+                    status: t.status,
+                    priority: t.priority,
+                    due_at: t.due_at,
+                    due_at_local: formatUtcIsoToLocalDateTime(
+                        t.due_at,
+                        timezone,
+                    ),
+                    due_date_local: formatUtcIsoToLocalDate(t.due_at, timezone),
+                    project: t.project
+                        ? { id: t.project.id, name: t.project.name }
+                        : null,
+                }));
+
+            const options: TaskOption[] = taskList
+                .filter(
+                    (t) => t.status === 'todo' || t.status === 'in_progress',
+                )
+                .map((t) => ({
+                    id: t.id,
+                    title: t.title,
+                    status: t.status,
+                }));
+
+            if (!cancelled) {
+                setLocalEvents(expanded);
+                setLocalProjects(summaries);
+                setLocalDeadlines(deadlines);
+                setLocalTasksSelect(options);
+            }
+        }
+
+        void loadLocal();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        repositories,
+        hydratedFromServer,
+        isOnline,
+        dataVersion,
+        range_start,
+        range_end,
+        timezone,
+    ]);
+
+    const events = localEvents ?? serverEvents;
+    const task_deadlines = localDeadlines ?? serverTaskDeadlines;
+    const projects = localProjects ?? serverProjects;
+    const tasks_for_select = localTasksSelect ?? serverTasksForSelect;
+    const conflict_warnings =
+        localConflictWarnings.length > 0
+            ? localConflictWarnings
+            : serverConflictWarnings;
     const [dialogOpen, setDialogOpen] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(
@@ -257,6 +427,22 @@ export default function CalendarIndex({
     );
 
     const navigateCalendar = (nextView: CalendarView, nextDate: string) => {
+        const bounds = computeRangeBounds(nextView, nextDate);
+        setViewState(nextView);
+        setActiveDateState(nextDate);
+        setRangeStartState(bounds.rangeStart);
+        setRangeEndState(bounds.rangeEnd);
+
+        if (!isOnline || hydratedFromServer) {
+            if (typeof window !== 'undefined') {
+                const nextUrl = calendarIndex.url({
+                    query: { view: nextView, date: nextDate },
+                });
+                window.history.replaceState({}, '', nextUrl);
+            }
+            return;
+        }
+
         router.get(
             calendarIndex.url({ query: { view: nextView, date: nextDate } }),
             {},
@@ -350,10 +536,153 @@ export default function CalendarIndex({
         );
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         const rule = buildRecurrenceRule(recurrenceFreq, recurrenceByDay);
+
+        if (repositories) {
+            try {
+                let projectUuid: string | null = null;
+                if (form.data.project_id !== '') {
+                    const pId = Number(form.data.project_id);
+                    const match = projects.find((p) => p.id === pId);
+                    projectUuid =
+                        match?.uuid ??
+                        (await repositories.projects.getByServerId(pId))
+                            ?.uuid ??
+                        null;
+                }
+
+                let taskUuid: string | null = null;
+                if (form.data.task_id !== '') {
+                    const tId = Number(form.data.task_id);
+                    taskUuid =
+                        (await repositories.tasks.getByServerId(tId))?.uuid ??
+                        null;
+                }
+
+                const eventInput = {
+                    title: form.data.title,
+                    description:
+                        form.data.description.trim() === ''
+                            ? null
+                            : form.data.description,
+                    is_all_day: form.data.is_all_day,
+                    starts_at_local: form.data.is_all_day
+                        ? null
+                        : form.data.starts_at,
+                    ends_at_local: form.data.is_all_day
+                        ? null
+                        : form.data.ends_at,
+                    start_date: form.data.is_all_day
+                        ? form.data.start_date
+                        : null,
+                    end_date: form.data.is_all_day ? form.data.end_date : null,
+                    project_uuid: projectUuid,
+                    task_uuid: taskUuid,
+                    recurrence_rule:
+                        editingEvent && editScope === 'single' ? null : rule,
+                    recurrence_until:
+                        editingEvent && editScope === 'single'
+                            ? null
+                            : form.data.recurrence_until || null,
+                };
+
+                // Detect local schedule conflicts before saving (`D-23`).
+                if (
+                    !eventInput.is_all_day &&
+                    eventInput.starts_at_local &&
+                    eventInput.ends_at_local
+                ) {
+                    const startIso = localDateTimeToUtcIso(
+                        eventInput.starts_at_local,
+                        timezone,
+                    );
+                    const endIso = localDateTimeToUtcIso(
+                        eventInput.ends_at_local,
+                        timezone,
+                    );
+                    const warnings = findConflictsForInterval(
+                        startIso,
+                        endIso,
+                        events,
+                        editingEvent?.uuid ?? editingEvent?.series_uuid ?? null,
+                    );
+                    setLocalConflictWarnings(warnings);
+                } else {
+                    setLocalConflictWarnings([]);
+                }
+
+                if (editingEvent) {
+                    const seriesUuid =
+                        editingEvent.series_uuid ??
+                        (
+                            await repositories.calendar.getByServerId(
+                                editingEvent.series_id,
+                            )
+                        )?.uuid;
+
+                    if (
+                        editingEvent.is_recurring &&
+                        editScope === 'single' &&
+                        seriesUuid &&
+                        editingEvent.recurrence_id
+                    ) {
+                        if (editingEvent.is_override && editingEvent.uuid) {
+                            await repositories.calendar.updateEvent(
+                                editingEvent.uuid,
+                                eventInput,
+                                timezone,
+                            );
+                        } else {
+                            await repositories.calendar.createEvent(
+                                {
+                                    ...eventInput,
+                                    parent_event_uuid: seriesUuid,
+                                    recurrence_id: editingEvent.recurrence_id,
+                                    recurrence_rule: null,
+                                    recurrence_until: null,
+                                },
+                                timezone,
+                            );
+                        }
+                    } else if (seriesUuid) {
+                        await repositories.calendar.updateEvent(
+                            seriesUuid,
+                            eventInput,
+                            timezone,
+                        );
+                    }
+                    notifyLocalMutation();
+                    toast.success(
+                        isOnline
+                            ? 'Agenda diperbarui.'
+                            : 'Perubahan agenda disimpan di perangkat.',
+                    );
+                    setDialogOpen(false);
+                    return;
+                }
+
+                await repositories.calendar.createEvent(eventInput, timezone);
+                notifyLocalMutation();
+                toast.success(
+                    isOnline
+                        ? 'Agenda berhasil dibuat.'
+                        : 'Agenda tersimpan di perangkat (offline).',
+                );
+                setDialogOpen(false);
+                return;
+            } catch (err) {
+                toast.error(
+                    err instanceof Error
+                        ? err.message
+                        : 'Gagal menyimpan agenda.',
+                );
+                return;
+            }
+        }
+
         const payload = {
             title: form.data.title,
             description:
@@ -403,9 +732,44 @@ export default function CalendarIndex({
         });
     };
 
-    const handleConfirmDelete = () => {
+    const handleConfirmDelete = async () => {
         if (!editingEvent) {
             return;
+        }
+
+        if (repositories) {
+            const seriesUuid =
+                editingEvent.series_uuid ??
+                (
+                    await repositories.calendar.getByServerId(
+                        editingEvent.series_id,
+                    )
+                )?.uuid;
+
+            if (seriesUuid) {
+                if (
+                    editingEvent.is_recurring &&
+                    deleteScope === 'single' &&
+                    editingEvent.recurrence_id
+                ) {
+                    if (editingEvent.is_override && editingEvent.uuid) {
+                        await repositories.calendar.deleteLocal(
+                            editingEvent.uuid,
+                        );
+                    }
+                    await repositories.calendar.excludeSingleOccurrence(
+                        seriesUuid,
+                        editingEvent.recurrence_id,
+                    );
+                } else {
+                    await repositories.calendar.deleteLocal(seriesUuid);
+                }
+                notifyLocalMutation();
+                toast.success('Agenda berhasil dihapus.');
+                setDeleteDialogOpen(false);
+                setDialogOpen(false);
+                return;
+            }
         }
 
         router.delete(

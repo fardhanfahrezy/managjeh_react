@@ -1,8 +1,10 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { Calendar, FolderKanban, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import ProjectController from '@/actions/App/Http/Controllers/ProjectController';
 import InputError from '@/components/input-error';
+import { useOffline } from '@/components/offline/offline-provider';
 import {
     formatDateDisplay,
     PROJECT_STATUS_BADGE_CLASS,
@@ -50,9 +52,47 @@ type ProjectsIndexProps = {
 };
 
 export default function ProjectsIndex({
-    projects,
-    filters,
+    projects: serverProjects,
+    filters: serverFilters,
 }: ProjectsIndexProps) {
+    const {
+        repositories,
+        hydratedFromServer,
+        isOnline,
+        dataVersion,
+        notifyLocalMutation,
+    } = useOffline();
+
+    const [statusFilter, setStatusFilter] = useState(serverFilters.status);
+    const [localProjects, setLocalProjects] = useState<Project[] | null>(null);
+    const [localSaving, setLocalSaving] = useState(false);
+
+    useEffect(() => {
+        setStatusFilter(serverFilters.status);
+    }, [serverFilters.status]);
+
+    useEffect(() => {
+        if (!repositories || (!hydratedFromServer && isOnline)) {
+            return;
+        }
+
+        let cancelled = false;
+        void repositories.projects
+            .listWithProgress((statusFilter || '') as ProjectStatus | '')
+            .then((list) => {
+                if (!cancelled) {
+                    setLocalProjects(list);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [repositories, hydratedFromServer, isOnline, dataVersion, statusFilter]);
+
+    const projects = localProjects ?? serverProjects;
+    const filters = { status: statusFilter };
+
     const [formOpen, setFormOpen] = useState(false);
     const [editingProject, setEditingProject] = useState<Project | null>(null);
     const [deletingProject, setDeletingProject] = useState<Project | null>(
@@ -100,7 +140,14 @@ export default function ProjectsIndex({
     }, [formOpen, editingProject?.id]);
 
     const handleFilterStatus = (status: string) => {
-        const query = status !== 'all' ? { status } : undefined;
+        const nextStatus = status !== 'all' ? status : '';
+        setStatusFilter(nextStatus);
+
+        if (!isOnline || hydratedFromServer) {
+            return;
+        }
+
+        const query = nextStatus ? { status: nextStatus } : undefined;
         router.get(
             projectsIndex.url(query ? { query } : undefined),
             {},
@@ -108,8 +155,67 @@ export default function ProjectsIndex({
         );
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (repositories) {
+            setLocalSaving(true);
+            try {
+                if (editingProject) {
+                    const uuid =
+                        editingProject.uuid ??
+                        (
+                            await repositories.projects.getByServerId(
+                                editingProject.id,
+                            )
+                        )?.uuid;
+                    if (uuid) {
+                        await repositories.projects.updateProject(uuid, {
+                            name: form.data.name,
+                            description: form.data.description || null,
+                            status: form.data.status,
+                            start_date: form.data.start_date || null,
+                            due_date: form.data.due_date || null,
+                        });
+                        notifyLocalMutation();
+                        toast.success(
+                            isOnline
+                                ? 'Project berhasil diperbarui.'
+                                : 'Perubahan project disimpan di perangkat.',
+                        );
+                        setFormOpen(false);
+                        setLocalSaving(false);
+                        return;
+                    }
+                } else {
+                    await repositories.projects.createProject({
+                        name: form.data.name,
+                        description: form.data.description || null,
+                        status: form.data.status,
+                        start_date: form.data.start_date || null,
+                        due_date: form.data.due_date || null,
+                    });
+                    notifyLocalMutation();
+                    toast.success(
+                        isOnline
+                            ? 'Project berhasil dibuat.'
+                            : 'Project tersimpan di perangkat (offline).',
+                    );
+                    setFormOpen(false);
+                    setLocalSaving(false);
+                    return;
+                }
+            } catch (err) {
+                toast.error(
+                    err instanceof Error
+                        ? err.message
+                        : 'Gagal menyimpan project.',
+                );
+                setLocalSaving(false);
+                return;
+            }
+            setLocalSaving(false);
+        }
 
         form.transform((data) => ({
             ...data,
@@ -132,9 +238,27 @@ export default function ProjectsIndex({
         }
     };
 
-    const handleConfirmDelete = () => {
+    const handleConfirmDelete = async () => {
         if (!deletingProject) {
             return;
+        }
+
+        if (repositories) {
+            const uuid =
+                deletingProject.uuid ??
+                (await repositories.projects.getByServerId(deletingProject.id))
+                    ?.uuid;
+            if (uuid) {
+                await repositories.projects.deleteLocal(uuid);
+                notifyLocalMutation();
+                setDeletingProject(null);
+                toast.success(
+                    isOnline
+                        ? 'Project berhasil dihapus.'
+                        : 'Project dihapus dari perangkat (akan disinkronkan saat online).',
+                );
+                return;
+            }
         }
 
         router.delete(ProjectController.destroy.url(deletingProject.id), {
@@ -461,8 +585,11 @@ export default function ProjectsIndex({
                             >
                                 Batal
                             </Button>
-                            <Button type="submit" disabled={form.processing}>
-                                {form.processing
+                            <Button
+                                type="submit"
+                                disabled={form.processing || localSaving}
+                            >
+                                {form.processing || localSaving
                                     ? 'Menyimpan...'
                                     : editingProject
                                       ? 'Simpan Perubahan'

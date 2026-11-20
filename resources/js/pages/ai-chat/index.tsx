@@ -9,6 +9,7 @@ import {
     SendHorizontal,
     SlidersHorizontal,
     Sparkles,
+    WifiOff,
 } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { toast } from 'sonner';
@@ -17,6 +18,7 @@ import { ActionPlanCard } from '@/components/ai-chat/action-plan-card';
 import { AuditHistoryPanel } from '@/components/ai-chat/audit-history-panel';
 import { ConversationSidebar } from '@/components/ai-chat/conversation-sidebar';
 import { MarkdownLite } from '@/components/ai-chat/markdown-lite';
+import { useOffline } from '@/components/offline/offline-provider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -170,6 +172,7 @@ export default function AiChatIndex({
     audits: initialAudits,
     timezone,
 }: Props) {
+    const { db, isOnline } = useOffline();
     const [conversations, setConversations] =
         useState<AiChatConversation[]>(initialConversations);
     const [activeConversation, setActiveConversation] =
@@ -178,6 +181,49 @@ export default function AiChatIndex({
     const [audits, setAudits] = useState<AiActionProposal[]>(initialAudits);
     const [activeTab, setActiveTab] = useState<ActiveTab>('chat');
     const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+
+    // Cache loaded conversations & messages for read-only offline viewing (`D-25`).
+    useEffect(() => {
+        if (!db) {
+            return;
+        }
+        const now = new Date().toISOString();
+        if (conversations.length > 0) {
+            void db.cached_snapshots.put({
+                key: 'ai_chat_conversations',
+                payload: {
+                    conversations,
+                    activeConversation,
+                    messages,
+                },
+                updated_at: now,
+            });
+            return;
+        }
+
+        if (!isOnline) {
+            void db.cached_snapshots
+                .get('ai_chat_conversations')
+                .then((snap) => {
+                    const cached = snap?.payload as
+                        | {
+                              conversations?: AiChatConversation[];
+                              activeConversation?: AiChatConversation | null;
+                              messages?: AiChatMessage[];
+                          }
+                        | undefined;
+                    if (cached?.conversations) {
+                        setConversations(cached.conversations);
+                    }
+                    if (cached?.activeConversation) {
+                        setActiveConversation(cached.activeConversation);
+                    }
+                    if (cached?.messages) {
+                        setMessages(cached.messages);
+                    }
+                });
+        }
+    }, [db, isOnline, conversations, activeConversation, messages]);
 
     const [input, setInput] = useState('');
     const [sending, setSending] = useState(false);
@@ -822,6 +868,33 @@ export default function AiChatIndex({
                         {activeTab === 'chat' && (
                             <div className="border-t border-border bg-card px-4 py-3 md:px-6">
                                 <div className="mx-auto max-w-3xl space-y-2">
+                                    {!isOnline && (
+                                        <div
+                                            role="status"
+                                            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-300/80 bg-amber-50/80 px-3 py-2 text-xs text-amber-900 dark:border-amber-800/70 dark:bg-amber-950/40 dark:text-amber-200"
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <WifiOff
+                                                    className="size-4 shrink-0"
+                                                    aria-hidden="true"
+                                                />
+                                                <span>
+                                                    Mode Offline (Hanya Baca):
+                                                    AI Chat membutuhkan koneksi
+                                                    internet. Gunakan AI Planner
+                                                    lokal untuk menyusun
+                                                    prioritas offline.
+                                                </span>
+                                            </div>
+                                            <Link
+                                                href={aiPlannerIndex()}
+                                                className="font-medium underline underline-offset-4"
+                                            >
+                                                Buka AI Planner
+                                            </Link>
+                                        </div>
+                                    )}
+
                                     {cooldown.rateLimitMessage && (
                                         <div
                                             role="status"
@@ -873,9 +946,13 @@ export default function AiChatIndex({
                                             onKeyDown={handleTextareaKeyDown}
                                             rows={2}
                                             maxLength={MAX_MESSAGE_LENGTH}
-                                            disabled={sending}
+                                            disabled={!isOnline || sending}
                                             aria-label="Tulis pesan untuk Asisten AI Managjeh"
-                                            placeholder="Tulis pertanyaan atau minta bantuan menyusun jadwal belajar... (Enter untuk kirim, Shift+Enter baris baru)"
+                                            placeholder={
+                                                isOnline
+                                                    ? 'Tulis pertanyaan atau minta bantuan menyusun jadwal belajar... (Enter untuk kirim, Shift+Enter baris baru)'
+                                                    : 'Mode offline — hubungkan perangkat ke internet untuk mengirim pesan ke AI Chat.'
+                                            }
                                             className="w-full resize-none bg-transparent px-2 py-1 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-60"
                                         />
 
@@ -897,6 +974,7 @@ export default function AiChatIndex({
                                                 type="submit"
                                                 size="sm"
                                                 disabled={
+                                                    !isOnline ||
                                                     sending ||
                                                     cooldown.isCoolingDown ||
                                                     input.trim() === ''
