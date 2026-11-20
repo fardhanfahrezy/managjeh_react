@@ -91,3 +91,21 @@ Seluruh halaman aplikasi menggunakan layout utama `AppLayout` (sidebar navigasi 
 1. **Keyboard & Screen Reader:** Semua kontrol interaktif menggunakan primitif Radix UI dengan cincin fokus `focus-visible` `3px`; seluruh tombol ikon (`size="icon"`) memiliki `aria-label` kontekstual (mis. `Edit project ...`, `Hapus tugas ...`, `Periode sebelumnya`); pesan status/cooldown menggunakan `role="status"` dan `aria-live="polite"`.
 2. **Tabular Numerals:** Seluruh tampilan angka waktu, tanggal, persentase progres, kode OTP, dan durasi menggunakan utilitas `tabular-nums`.
 3. **Mobile-First Layout:** Header halaman, filter bar, dan kartu beradaptasi dari layar ponsel (`375px`) hingga desktop lebar menggunakan kombinasi `flex-col sm:flex-row`, `min-w-0`, dan drawer `Sheet` pada navigasi mobile.
+4. **Optimasi Code-Splitting Entry (`FACT`):** Di [resources/js/app.tsx](../resources/js/app.tsx), `AuthLayout`, `SettingsLayout`, dan `Toaster` (`sonner`) dimuat secara lazy menggunakan `React.lazy` + `Suspense` agar tidak menghalangi initial load halaman utama seperti `/dashboard`.
+
+---
+
+## 6. Rencana Frontend Lanjutan — Website AI Chat Hub (`CONFIRMED` / `Planned` — `D-17`, `D-18`, `D-19`)
+
+> **Status Implementasi:** `Planned` (desain teknis MVP 2 terkunci; belum ada halaman/komponen AI Chat di `resources/js/` saat ini; `/ai-planner` pada Bagian 3 tetap dipertahankan).
+
+1. **AI Chat Interface (`/ai-chat`, Berdampingan dengan `/ai-planner` — `D-17`):**
+    - Menambahkan menu baru **"AI Chat"** di [app-sidebar.tsx](../resources/js/components/app-sidebar.tsx) di dalam `AppLayout` mengikuti sistem desain **"The Quiet Desk"** ([DESIGN.md](../DESIGN.md)).
+    - Tata letak **2 kolom di desktop** (daftar riwayat percakapan di kiri + panel chat di kanan), **drawer daftar percakapan di mobile (`375px`)**, serta tombol **starter prompt chips** (mis. susun jadwal belajar minggu ini, cek deadline terdekat).
+    - Pengiriman pesan menggunakan **synchronous JSON request-response** (`fetch` / Inertia `useHttp`) dengan optimistic user bubble, indikator status memproses, batas input `2.000` karakter, serta reuse [use-rate-limit-cooldown.ts](../resources/js/hooks/use-rate-limit-cooldown.ts) untuk menangani HTTP `429`.
+2. **Riwayat Percakapan & Panel Audit (`D-19`):**
+    - Daftar sesi percakapan dengan judul otomatis dari pesan pertama (maks 60 karakter), aksi rename & hapus manual, info retensi otomatis 30 hari, serta panel/tab ringkas **"Riwayat Aksi AI"** di `/ai-chat`.
+3. **Action Plan Confirmation UI (_Human-in-the-Loop_):**
+    - Kartu Rencana Aksi (Action Plan Card) menampilkan daftar item usulan mutasi (`create_task`, `update_task`, `create_schedule`, `update_schedule`) dilengkapi **checkbox per item**, badge peringatan bentrok jadwal otomatis dari `ScheduleConflictDetector`, status masa berlaku **24 jam**, serta tombol **"Setujui Terpilih"** dan **"Tolak Semua"** (tanpa form edit inline di dalam kartu).
+4. **Tab Settings Baru (`/settings/ai`) & Preferensi Notifikasi Outbound:**
+    - Menyediakan tab Settings baru **`/settings/ai`** untuk mengatur `users.ai_preferences` (gaya respons `ringkas`/`seimbang`/`mendetail`, jam belajar favorit, durasi blok fokus default `30`/`45`/`60`/`90` menit, dan instruksi singkat maks 300 karakter) serta kontrol opt-in/opt-out dan jam kustom `users.notification_preferences` (Ringkasan Harian, Ringkasan Mingguan, Persiapan Kegiatan H-15 menit).

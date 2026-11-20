@@ -31,14 +31,16 @@ LOG_STACK=single
 LOG_LEVEL=warning
 
 DB_CONNECTION=pgsql
-DB_HOST=aws-1-ap-northeast-1.pooler.supabase.com
+DB_HOST=aws-1-<region>.pooler.supabase.com
 DB_PORT=5432
 DB_DATABASE=postgres
 DB_USERNAME=postgres.<project_ref>
 DB_PASSWORD=your_strong_db_password
 DB_SSLMODE=require
+DB_PERSISTENT=true
 
-SESSION_DRIVER=database
+# Direkomendasikan `cookie` di produksi Railway untuk mengurangi round-trip DB sesi per request
+SESSION_DRIVER=cookie
 SESSION_LIFETIME=120
 SESSION_SECURE_COOKIE=true
 QUEUE_CONNECTION=database
@@ -76,7 +78,7 @@ composer install --no-dev --optimize-autoloader
 npm ci
 npm run build
 
-# 2. Jalankan seluruh migrasi database (11 migrasi)
+# 2. Jalankan seluruh migrasi database (12 migrasi)
 php artisan migrate --force
 
 # 3. Buat akun pengguna melalui CLI Provisioning (registrasi publik dinonaktifkan sesuai D-01)
@@ -143,10 +145,11 @@ php artisan queue:restart
 
 Repository ini menyediakan konfigurasi kontainer siap pakai untuk **Railway** + **Supabase PostgreSQL** (`Session Pooler` port `5432`):
 
-- **[Dockerfile](../Dockerfile):** Image `dunglas/frankenphp:php8.5-trixie` lengkap dengan ekstensi PHP PostgreSQL (`pdo_pgsql`, `pgsql`), `intl`, `bcmath`, `pcntl`, Composer `--no-dev`, dan build Vite + Wayfinder (Node.js 22).
-- **[Caddyfile](../Caddyfile):** Konfigurasi FrankenPHP dengan `auto_https off` (di belakang proxy HTTPS Railway) pada `:{$PORT:8080}`.
-- **[docker/start.sh](../docker/start.sh):** Menjalankan `config:cache`, `route:cache`, `view:cache`, `php artisan migrate --force`, worker antrean & scheduler latar belakang, lalu menjalankan server web FrankenPHP.
+- **[Dockerfile](../Dockerfile):** Image `dunglas/frankenphp:php8.5-trixie` lengkap dengan ekstensi PHP PostgreSQL (`pdo_pgsql`, `pgsql`), `intl`, `bcmath`, `pcntl`, konfigurasi OPcache produksi ([docker/php/production.ini](../docker/php/production.ini)), Composer `--no-dev`, dan build Vite + Wayfinder (Node.js 22).
+- **[Caddyfile](../Caddyfile):** Konfigurasi FrankenPHP dengan `auto_https off` (di belakang proxy HTTPS Railway) pada `:{$PORT:8080}`, kompresi `zstd gzip`, serta header `Cache-Control: public, max-age=31536000, immutable` untuk `/build/assets/*` dan `max-age=86400` untuk ikon statis & `robots.txt`.
+- **[docker/start.sh](../docker/start.sh):** Menjalankan `config:cache`, `route:cache`, `view:cache`, `php artisan migrate --force`, worker antrean (`queue:work database --sleep=15`) & scheduler latar belakang, lalu menjalankan server web FrankenPHP.
 - **[bootstrap/app.php](../bootstrap/app.php):** Mengaktifkan `trustProxies(at: '*')` agar skema HTTPS di belakang load balancer Railway terdeteksi dengan benar.
+- **Kesiapan Arsitektur MVP 2 (`CONFIRMED` / `Planned` — `D-16`):** Karena AI Orchestrator dan Internal MCP Server (`app/Mcp/`) berjalan **in-process di dalam monolith Laravel** dengan mode **synchronous JSON request-response** (bukan SSE long-lived dan tidak menunggu `queue:work --sleep=15`), deployment MVP 2 tetap berjalan pada satu container FrankenPHP di Railway tanpa microservice terpisah. MVP 2 juga menambahkan scheduler harian untuk rolling sync 48 jam agenda berulang & digest harian/mingguan deterministik, serta middleware HTTP Security Headers. Pastikan region PostgreSQL tetap sejajar dengan region Railway (mis. Singapore) guna menekan TTFB.
 
 ---
 

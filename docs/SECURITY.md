@@ -1,6 +1,6 @@
-# Security & Privacy Documentation — Managjeh (Personal OS Mahasiswa — MVP 1)
+# Security & Privacy Documentation — Managjeh (Personal OS Mahasiswa — MVP 1 & MVP 2)
 
-Dokumen ini mendokumentasikan seluruh mekanisme keamanan, isolasi kepemilikan data, proteksi kredensial, rate limiting, ekspor data, dan retensi privasi yang **telah diimplementasikan dan terverifikasi (`Implemented & Verified`)** pada **Managjeh MVP 1** (`D-01` s.d. `D-15`).
+Dokumen ini mendokumentasikan seluruh mekanisme keamanan, isolasi kepemilikan data, proteksi kredensial, rate limiting, HTTP security headers (CSP nonce + HSTS), ekspor data, dan retensi privasi yang **telah diimplementasikan dan terverifikasi (`Implemented & Verified`)** pada **Managjeh MVP 1 & MVP 2** (`D-01` s.d. `D-19`).
 
 ---
 
@@ -53,10 +53,16 @@ Dokumen ini mendokumentasikan seluruh mekanisme keamanan, isolasi kepemilikan da
 3. **Rate Limiting Endpoint Sensitif:**
     - Dikonfigurasi di [AppServiceProvider.php](../app/Providers/AppServiceProvider.php) dan [routes/settings.php](../routes/settings.php):
         - `POST /ai-planner/generate` → `throttle:ai-planner` (**10 request / menit** per user).
+        - `POST /ai-chat/messages` → `throttle:ai-chat` (**20 request / menit** per user).
         - `POST /settings/whatsapp/send-otp` → `throttle:whatsapp-otp` (**5 request / menit** per user).
         - `POST /settings/whatsapp/verify-otp` → `throttle:10,1` (**10 request / menit**).
         - `GET /settings/profile/export` → `throttle:data-export` (**5 request / menit** per user).
         - `PUT /settings/password` → `throttle:6,1` (**6 request / menit**).
+4. **HTTP Security Headers (`AddSecurityHeaders`):**
+    - Terdaftar pada grup middleware `web` di [bootstrap/app.php](../bootstrap/app.php) melalui [AddSecurityHeaders.php](../app/Http/Middleware/AddSecurityHeaders.php) dan nonce script di [app.blade.php](../resources/views/app.blade.php):
+        - `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Cross-Origin-Opener-Policy: same-origin`.
+        - `Strict-Transport-Security: max-age=31536000; includeSubDomains` pada request HTTPS atau lingkungan `production`.
+        - `Content-Security-Policy` memakai `Vite::useCspNonce()` (`script-src 'self' 'nonce-{nonce}'`, `frame-ancestors 'none'`, `object-src 'none'`) pada lingkungan non-local, dengan kelonggaran origin Vite dev server khusus `app()->isLocal()`.
 
 ---
 
@@ -75,3 +81,28 @@ Dokumen ini mendokumentasikan seluruh mekanisme keamanan, isolasi kepemilikan da
 - Jangan pernah melakukan commit file `.env` ke Git (sudah dilindungi di `.gitignore`).
 - Jangan pernah menulis API key (`GEMINI_API_KEY`, `XAI_API_KEY`, `GROK_API_KEY`, `OPENROUTER_API_KEY`, `FONNTE_TOKEN`, `WHATSAPP_API_TOKEN`) secara hardcoded di source code, test, maupun dokumentasi.
 - Selalu gunakan placeholder aman pada dokumentasi dan gunakan `Http::fake()` beserta `WHATSAPP_DRIVER=null` pada pengujian otomatis.
+
+---
+
+## 7. Persyaratan Keamanan & Privasi Terencana (`CONFIRMED` / `Planned` — `D-16` s.d. `D-19`)
+
+> **Status Implementasi:** `Planned` (desain keamanan MVP 2 telah terkunci; belum diimplementasikan di kode saat ini).
+
+1. **Trust Boundary Internal MCP Server & AI Orchestrator (`D-16`):**
+    - Autentikasi sesi website & backend Laravel menjadi satu-satunya dasar otorisasi untuk seluruh permintaan AI Chat dan pemanggilan tool MCP in-process di `app/Mcp/` (tanpa endpoint HTTP `/mcp` eksternal di MVP 2).
+    - **Anti-Spoofing `user_id`:** MCP Server dilarang mempercayai atau menerima parameter `user_id` dari input prompt maupun argumen tool yang dihasilkan model AI.
+    - AI dilarang mengakses database PostgreSQL secara langsung; seluruh akses baca/tulis wajib melalui service & Policy backend yang sama dengan fitur web.
+    - **Batasan Eksekusi & Rate Limit:** Rate limiter `ai-chat` (**20 request/menit** per user), batas panjang pesan `2.000` karakter, batas instruksi preferensi AI `300` karakter, serta batas maksimal **4 putaran tool-call** per pesan.
+2. **Persetujuan Mutasi, TTL 24 Jam & Jejak Audit (`D-12`, `D-17`):**
+    - Write tools MVP 2 dibatasi pada operasi **non-destruktif** (`create_task`, `update_task`, `create_schedule`, `update_schedule`; tanpa `delete_*`).
+    - Seluruh pemanggilan write tool dicegat menjadi baris `ai_action_proposals` (kedaluwarsa otomatis setelah **24 jam**) dan tidak pernah dieksekusi di dalam loop LLM.
+    - Eksekusi setelah klik persetujuan pengguna wajib memvalidasi ulang kepemilikan, `TaskPolicy`/`CalendarEventPolicy`, dan aturan validasi secara idempoten serta mencatat hasil audit yang ikut whitelist ekspor `GET /settings/profile/export`.
+3. **Privasi Riwayat Percakapan AI (`D-19`):**
+    - Riwayat percakapan (`ai_chat_conversations`, `ai_chat_messages`) dan `ai_action_proposals` diisolasi ketat per `user_id`, dipangkas otomatis setelah **30 hari** (`app:prune-retention-data`), dan menyediakan aksi hapus manual oleh pengguna.
+    - Kredensial, token API, email, nomor WhatsApp, password, maupun data rahasia tetap dilarang dikirim ke provider AI eksternal (`D-15`).
+4. **Privasi Notifikasi & Data Finansial Masa Depan (MVP 3):**
+    - Pengiriman notifikasi WhatsApp wajib berdasarkan persetujuan pengguna (`opt-in`) dan pengguna harus bisa mengaktifkan/menonaktifkan notifikasi kapan saja.
+    - Pesan WhatsApp tidak boleh memuat informasi keuangan sensitif secara berlebihan.
+    - Sistem **dilarang keras** menyimpan password bank, PIN, OTP, atau kredensial e-wallet dalam database, cache, maupun log.
+5. **Paket Hardening HTTP Security Headers (`CONFIRMED` / `Planned` — Masuk Cakupan MVP 2):**
+    - Menindaklanjuti temuan audit Lighthouse produksi (`2026-11-16`), MVP 2 menyertakan middleware **HTTP Security Headers** untuk memasang `Strict-Transport-Security` (HSTS), `X-Frame-Options` (XFO), `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Cross-Origin-Opener-Policy` (COOP), dan baseline `Content-Security-Policy` (CSP) yang kompatibel dengan Vite & Inertia.

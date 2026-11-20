@@ -110,3 +110,33 @@ Dokumen ini mendokumentasikan seluruh aturan bisnis yang **telah diimplementasik
     - Endpoint `GET /settings/profile/export` hanya mengekspor kolom yang di-whitelist dari `user`, `projects`, `tasks`, `calendar_events`, `reminders`, dan `ai_planner_runs` milik pengguna yang sedang login. Field sensitif (`password`, `remember_token`, `two_factor_*`, `input_snapshot`, `error_message`, `failure_reason`) tidak disertakan.
 3. **Retensi Terjadwal ([PruneRetentionDataCommand.php](../app/Console/Commands/PruneRetentionDataCommand.php)):**
     - Menghapus permanen data _soft-deleted_ (`tasks`, `calendar_events`, `projects`) dan log terminal (`reminders` berstatus `sent`/`failed`/`cancelled` serta `ai_planner_runs`) yang berusia > 30 hari.
+
+---
+
+## 9. Aturan Bisnis Terencana — Website AI Hub, MCP & Perluasan Notifikasi Outbound (`CONFIRMED` / `Planned` — `D-16` s.d. `D-19`)
+
+> **Status Implementasi:** `Planned` (desain teknis & aturan bisnis MVP 2 telah terkunci; belum diimplementasikan di kode saat ini).
+
+1. **Pemisahan Tanggung Jawab Kanal (`D-16`):**
+    - **Website Managjeh** adalah satu-satunya pusat utama untuk berinteraksi dengan AI Chat (`/ai-chat`), mengelola tugas, jadwal, kebiasaan, keuangan, data pribadi, dan seluruh pengaturan modul.
+    - **WhatsApp** hanya berfungsi sebagai kanal notifikasi & pengingat keluar (_outbound notification_). Pengguna yang menerima pengingat diarahkan ke website Managjeh untuk melihat detail atau mengubah data.
+2. **Satu Sumber Kebenaran & Otorisasi Internal MCP (`D-16`):**
+    - Database Managjeh adalah _single source of truth_ dan seluruh business logic tetap berada di backend Laravel.
+    - AI mengakses 6 Read Tools (`get_my_tasks`, `get_upcoming_tasks`, `get_today_schedule`, `get_schedule_range`, `get_my_projects`, `get_daily_overview`) dan 4 Write Tools non-destruktif (`create_task`, `update_task`, `create_schedule`, `update_schedule`) melalui **Internal MCP Server** in-process di `app/Mcp/` — **bukan** mengakses database secara langsung.
+    - MCP Server wajib mengambil identitas pengguna dari konteks autentikasi backend yang valid. **AI dilarang menentukan, mengirim, atau memanipulasi `user_id` untuk mengakses data pengguna lain.**
+3. **Batasan Sesi AI Chat & Failure Mode (`D-03`, `D-17`, `D-19`):**
+    - Maksimal **4 putaran tool-call** per pesan, _sliding window_ **16 pesan terakhir** (8 pasang user–assistant), batas input `2.000` karakter per pesan, dan rate limit `ai-chat` (`20 req/menit` per pengguna).
+    - Judul percakapan terbentuk otomatis dari potongan pesan pertama (maks 60 karakter) dan dapat di-rename atau dihapus manual oleh pengguna.
+    - Jika seluruh provider LLM (`Gemini → Grok → OpenRouter`) gagal atau circuit breaker terbuka, sistem menampilkan pesan error ramah (tanpa chat fallback tiruan).
+4. **Persetujuan Eksplisit Sebelum Mutasi, TTL 24 Jam & Auditabilitas (`D-12`, `D-17`):**
+    - AI **dilarang mengubah data pengguna tanpa persetujuan eksplisit terlebih dahulu** dan tidak memiliki write tool destruktif (`delete_*`) maupun mutasi proyek di MVP 2.
+    - Setiap usulan mutasi dicegat menjadi baris `ai_action_proposals` (berlaku **24 jam**, otomatis `expired` jika melewati TTL), disertai pratinjau konflik jadwal via `ScheduleConflictDetector`, dan disajikan sebagai Kartu Rencana Aksi dengan **checkbox selektif per item** (`Setujui Terpilih` / `Tolak Semua`).
+    - Saat eksekusi, backend memvalidasi ulang kepemilikan, `TaskPolicy`/`CalendarEventPolicy`, dan aturan validasi secara idempoten, lalu mencatat hasil audit yang dapat ditinjau inline di chat, pada panel **"Riwayat Aksi AI"**, maupun di ekspor JSON `GET /settings/profile/export`.
+5. **Preferensi AI & Retensi 30 Hari (`D-15`, `D-19`):**
+    - Preferensi AI pada `users.ai_preferences` (gaya respons `ringkas`/`seimbang`/`mendetail`, jam belajar favorit, durasi blok fokus default `30`/`45`/`60`/`90` menit, dan instruksi singkat maks 300 karakter) diterapkan otomatis pada **AI Chat** maupun **AI Planner**.
+    - Riwayat percakapan (`ai_chat_conversations`, `ai_chat_messages`) dan `ai_action_proposals` mengikuti retensi otomatis **30 hari** (`app:prune-retention-data`) ditambah opsi hapus manual oleh pengguna kapan saja.
+6. **Aturan Perluasan Outbound WhatsApp, Multi-Channel & Privasi (`D-18`, `D-19`):**
+    - Pengguna dapat mengaktifkan/menonaktifkan (_opt-in/opt-out_) dan mengkustomisasi jam kirim per kategori notifikasi pada `users.notification_preferences` (tetap tunduk pada `QuietHoursAdjuster` `D-06` dan verifikasi OTP `D-14`).
+    - Perluasan MVP 2 mencakup **Ringkasan Harian** (default `07:00` lokal), **Ringkasan Mingguan** (default `Minggu 19:00` lokal) — keduanya disusun secara **deterministik (rule-based)** tanpa memanggil LLM —, **Persiapan Kegiatan (`event_prep`, H-15 menit)**, format pesan informatif (status, saran singkat, tautan website), serta **rolling sync 48 jam** harian via `RecurrenceExpanderService` agar agenda berulang (jadwal kuliah mingguan) ikut menerima pengingat.
+    - Pengiriman diarahkan melalui `OutboundChannelInterface` + `OutboundChannelManager` (`whatsapp` mendelegasikan ke `WhatsAppGatewayInterface` termasuk adapter `MetaCloudWhatsAppGateway`, sementara integrasi aktif Telegram ditunda hingga diperlukan).
+    - **Privasi Informasi Keuangan (MVP 3):** Pesan WhatsApp tidak boleh menampilkan informasi keuangan sensitif secara berlebihan, dan sistem **dilarang keras** menyimpan password bank, PIN, OTP, atau kredensial e-wallet dalam bentuk apa pun.

@@ -6,7 +6,7 @@ Dokumen ini merupakan **referensi implementasi aktual Phase 0 s.d. Phase 7** sek
 
 ## 1. Peta Lengkap File yang Sudah Berjalan (`FACT` — Jangan Buat Ulang!)
 
-Seluruh komponen di bawah ini **sudah terimplementasi dan diuji oleh 82 test Pest (`551` assertions)**. Sebelum membuat class, fungsi, atau komponen baru, periksa daftar ini:
+Seluruh komponen di bawah ini **sudah terimplementasi dan diuji oleh `84` test Pest lulus (`569` assertions, `2` skipped `RegistrationTest`)**. Sebelum membuat class, fungsi, atau komponen baru, periksa daftar ini:
 
 ### 1.1 Contracts & Enums
 
@@ -142,3 +142,15 @@ npm.cmd run build
 ### Langkah 7: Sinkronisasi Dokumentasi
 
 Perbarui [README.md](../README.md), [AGENTS.md](../AGENTS.md), dan file terkait di `docs/` apabila ada penambahan route, tabel database, variabel `.env`, atau command CLI.
+
+---
+
+## 3. Prinsip Pengembangan Lanjutan — Website AI Hub, MCP & Outbound Notification (`CONFIRMED` — `D-16` s.d. `D-19`)
+
+Saat mengimplementasikan fitur **MVP 2** (desain teknis terkunci) dan **MVP 3** (Habits/Sleep, Finance, Evaluasi Mingguan), AI Coding Agent wajib mematuhi prinsip dan batasan berikut:
+
+1. **Jangan Buat Ulang Fondasi MVP 1:** Reuse adapter LLM (`Gemini`, `Grok`, `OpenRouter`), `DashboardAggregatorService`, `RecurrenceExpanderService`, `ScheduleConflictDetector`, `ReminderSynchronizer`, `QuietHoursAdjuster`, `WhatsAppGatewayInterface`, `useRateLimitCooldown`, serta seluruh Policy & FormRequest yang sudah berjalan.
+2. **Internal MCP Tanpa Dependensi Baru (`app/Mcp/`):** Implementasikan `McpToolInterface`, `McpToolRegistry`, dan `McpToolExecutor` secara in-process (tanpa endpoint HTTP `/mcp` eksternal) dengan 6 Read Tools (`get_my_tasks`, `get_upcoming_tasks`, `get_today_schedule`, `get_schedule_range`, `get_my_projects`, `get_daily_overview`) dan 4 Write Tools non-destruktif (`create_task`, `update_task`, `create_schedule`, `update_schedule`). Tool dilarang menerima `user_id` dari argumen AI; selalu ikat ke objek `User` dari autentikasi Laravel.
+3. **Batas AI Orchestrator & Pengiriman Respons:** Gunakan _native function/tool calling_ per provider dengan batas maksimal **4 putaran tool-call**, _sliding window_ **16 pesan terakhir**, batas input `2.000` karakter, rate limit `ai-chat` (`20/menit`), mode **synchronous JSON request-response** (tanpa SSE), serta pesan error ramah jika seluruh provider gagal.
+4. **Human-in-the-Loop, TTL 24 Jam & Skema Minimal:** Setiap pemanggilan write tool wajib dicegat menjadi `ai_action_proposals` (TTL 24 jam, pratinjau konflik jadwal, checkbox selektif per item, re-validasi Policy idempoten saat eksekusi). Gunakan rancangan skema minimal MVP 2 (**3 tabel baru:** `ai_chat_conversations`, `ai_chat_messages`, `ai_action_proposals` + **2 kolom JSONB pada `users`:** `ai_preferences`, `notification_preferences`) dan reuse tabel `reminders` beserta retensi 30 hari di `PruneRetentionDataCommand`.
+5. **Perluasan Outbound, Rolling Sync & Hardening:** Gunakan `OutboundChannelInterface` + `OutboundChannelManager` (`whatsapp` → `WhatsAppGatewayInterface` + `MetaCloudWhatsAppGateway`; integrasi aktif Telegram ditunda), susun digest harian (`07:00` lokal) & mingguan (`Minggu 19:00` lokal) secara **deterministik (rule-based)**, tambahkan `event_prep` (H-15 menit) dan **rolling sync 48 jam** harian untuk agenda berulang, serta sertakan middleware **HTTP Security Headers** (`HSTS`, `XFO`, `X-Content-Type-Options`, `Referrer-Policy`, `COOP`, baseline `CSP`) dalam paket MVP 2 sebelum masuk ke modul **Habits** & **Finance** di MVP 3 (`D-18`).

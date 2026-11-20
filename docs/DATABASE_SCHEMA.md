@@ -1,6 +1,6 @@
-# Database Schema — Managjeh (Personal OS Mahasiswa — MVP 1)
+# Database Schema — Managjeh (Personal OS Mahasiswa — MVP 1 & MVP 2)
 
-Dokumen ini mendokumentasikan skema database **PostgreSQL** (`managjeh` & `managjeh_test`) yang **telah diimplementasikan dan terverifikasi penuh (`Implemented & Verified`)** melalui **12 file migrasi aktif** di `database/migrations/`.
+Dokumen ini mendokumentasikan skema database **PostgreSQL** (`managjeh` & `managjeh_test`) yang **telah diimplementasikan dan terverifikasi penuh (`Implemented & Verified`)** melalui **14 file migrasi aktif** di `database/migrations/`.
 
 Seluruh nama tabel dan kolom menggunakan **Bahasa Inggris `snake_case`**.
 
@@ -19,7 +19,7 @@ Seluruh nama tabel dan kolom menggunakan **Bahasa Inggris `snake_case`**.
 
 ---
 
-## 2. Daftar 12 Migrasi Aktif (`database/migrations/`)
+## 2. Daftar 14 Migrasi Aktif (`database/migrations/`)
 
 1. `0001_01_01_000000_create_users_table.php` — Membuat tabel `users`, `password_reset_tokens`, dan `sessions`.
 2. `0001_01_01_000001_create_cache_table.php` — Membuat tabel `cache` dan `cache_locks` (digunakan juga untuk OTP hash WhatsApp, rate limiter, dan circuit breaker AI).
@@ -33,6 +33,8 @@ Seluruh nama tabel dan kolom menggunakan **Bahasa Inggris `snake_case`**.
 10. `2026_11_15_000005_create_reminders_table.php` — Membuat tabel `reminders`.
 11. `2026_11_15_000006_create_ai_planner_runs_table.php` — Membuat tabel `ai_planner_runs`.
 12. `2026_11_16_000007_add_performance_indexes.php` — Menambahkan indeks FK dan indeks komposit query untuk `tasks`, `calendar_events`, dan `reminders`.
+13. `2026_11_20_000001_add_ai_and_notification_preferences_to_users_table.php` — Menambahkan kolom JSONB `ai_preferences` dan `notification_preferences` ke `users`.
+14. `2026_11_20_000002_create_ai_chat_tables.php` — Membuat tabel `ai_chat_conversations`, `ai_chat_messages`, dan `ai_action_proposals` beserta indeks komposit.
 
 ---
 
@@ -224,3 +226,23 @@ erDiagram
     CALENDAR_EVENTS ||--o{ CALENDAR_EVENTS : "overrides via parent_event_id (cascadeOnDelete)"
     CALENDAR_EVENTS ||--o{ REMINDERS : "hasMany (cascadeOnDelete)"
 ```
+
+---
+
+## 6. Kebutuhan Data Terencana (`CONFIRMED` / `Planned` — Belum Diimplementasikan)
+
+> **Catatan Kepatuhan Dokumentasi:** Seluruh tabel dan kolom pada Bagian 1–5 di atas merupakan skema aktual (`FACT`) dari **12 migrasi** yang ada di repository. Daftar di bawah ini adalah **rancangan skema terkunci MVP 2** (`CONFIRMED` / `Planned`, belum ada file migrasi) serta entitas konseptual MVP 3:
+
+1. **MVP 2 (`Planned` — Desain Skema Minimal Terkunci: 3 Tabel Baru + 2 Kolom JSONB pada `users`):**
+    - **Tabel Baru `ai_chat_conversations`:** Menyimpan sesi percakapan per `user_id` (`title` otomatis maks 60 karakter dari pesan pertama dan dapat di-rename/hapus manual, `last_message_at` UTC, timestamps).
+    - **Tabel Baru `ai_chat_messages`:** Menyimpan pesan per `conversation_id` dan `user_id` (`role`, `content`, metadata ringkasan tool calls tersanitasi tanpa PII, provider/model yang melayani, timestamps). Konteks LLM memakai _sliding window_ 16 pesan terakhir.
+    - **Tabel Baru `ai_action_proposals` (Proposal + Audit Trail Terpadu):** Menyimpan setiap item usulan mutasi write tool (`create_task`, `update_task`, `create_schedule`, `update_schedule`) terkait `ai_chat_message_id` dan `user_id`, meliputi `tool_name`, `payload` JSONB, hasil pratinjau konflik jadwal, `status` (`pending` / `executed` / `rejected` / `failed` / `expired`), `expires_at` (TTL 24 jam UTC), `decided_at`, `executed_at`, referensi target (`target_type`, `target_id`), dan ringkasan hasil eksekusi untuk audit trail & whitelist ekspor `GET /settings/profile/export`.
+    - **Ekstensi Tabel `users` (2 Kolom JSONB Baru):**
+        - `ai_preferences` (`jsonb`, nullable): gaya respons (`concise`/`balanced`/`detailed`), jam belajar favorit (mulai–selesai), durasi blok fokus default (`30`/`45`/`60`/`90` menit), dan instruksi pribadi singkat maks 300 karakter.
+        - `notification_preferences` (`jsonb`, nullable): toggle aktif/nonaktif & jadwal kustom lokal per kategori pengingat outbound (`daily_summary` default `07:00`, `weekly_summary` default `Minggu 19:00`, `event_prep` H-15 menit).
+    - **Reuse Tabel `reminders` (Tanpa Tabel Baru):** Menambahkan variasi `reminder_type` (`event_prep`, `daily_summary`, `weekly_summary`) dengan `idempotency_key` deterministik untuk digest dan rolling sync 48 jam agenda berulang, serta tetap memakai kolom `channel` (`whatsapp`, siap kanal lain).
+    - **Perluasan Retensi 30 Hari (`D-15`, `D-19`):** `PruneRetentionDataCommand` akan diperluas untuk memangkas `ai_chat_conversations`, `ai_chat_messages`, dan `ai_action_proposals` yang berusia > 30 hari.
+2. **MVP 3 (`Planned` — Modul Personal OS Lanjutan):**
+    - **Habits & Rutinitas/Tidur:** Entitas kebiasaan harian, log penyelesaian, serta target rutinitas/tidur milik `user_id`.
+    - **Finance (Pengeluaran, Anggaran & Tagihan):** Entitas transaksi pengeluaran, anggaran kategori, dan jadwal jatuh tempo tagihan milik `user_id` (**dilarang** menyimpan password bank, PIN, OTP, atau kredensial e-wallet).
+    - **Evaluasi & Refleksi Mingguan:** Entitas ringkasan evaluasi dan refleksi mingguan milik `user_id`.

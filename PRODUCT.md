@@ -12,7 +12,10 @@ Mahasiswa (pengguna tunggal pada tahap awal, dengan arsitektur siap multi-user) 
 
 ## Product Purpose
 
-Managjeh adalah aplikasi web **Personal OS Mahasiswa** untuk mengelola **Task**, **Project**, **Calendar (termasuk agenda berulang)**, **Dashboard**, **Pengingat WhatsApp**, dan **AI Planner** (rekomendasi 3 prioritas utama harian).
+Managjeh adalah aplikasi web **Personal OS Mahasiswa** yang menempatkan **Website Managjeh sebagai pusat kendali seluruh modul dan pusat interaksi AI**, serta **WhatsApp sebagai kanal pengingat dan notifikasi otomatis (outbound)**.
+
+- **MVP 1 (`Implemented & Verified`):** Mengelola **Task (beserta subtugas 1 tingkat)**, **Project**, **Calendar (termasuk agenda berulang)**, **Dashboard terpadu**, **Pengingat WhatsApp (OTP + quiet hours)**, **AI Planner** (3 prioritas utama harian), serta **Ekspor Data & Retensi Privasi**.
+- **MVP 2 & MVP 3 (`CONFIRMED` / `Planned`):** Memperluas website menjadi **AI Chat Hub** kontekstual berbasis **AI Orchestrator + Internal MCP Server** (berdampingan dengan `/ai-planner`, lengkap dengan riwayat percakapan, rencana tindakan _propose → approve → execute_, dan audit trail), memperluas **WhatsApp Notification Service** (persiapan kegiatan, ringkasan harian/mingguan, kesiapan multi-channel Telegram), serta menambahkan modul **Habits/Tidur**, **Finance/Anggaran/Tagihan**, dan **Refleksi Mingguan**.
 
 Keberhasilan produk diukur dari:
 
@@ -50,7 +53,8 @@ Berbeda dari aplikasi _to-do list_ atau kalender generik yang pasif dan terpisah
 
 ### Batasan Teknis & Domain yang Mengikat
 
-- **Di Luar Cakupan MVP 1:** Keuangan/anggaran, _habit tracker_, pelacakan tidur/mood, catatan kuliah, karier/portofolio, manajemen kontak, dokumen, jurnal mingguan, sinkronisasi Google Calendar eksternal, dan input/perubahan data melalui balasan pesan WhatsApp.
+- **Tahap Berikutnya (`CONFIRMED` / `Planned`, Belum Diimplementasikan di MVP 1):** Website **AI Chat + AI Orchestrator + Internal MCP Server** dan perluasan notifikasi outbound/multi-channel Telegram (MVP 2); modul **Habits/Rutinitas/Tidur**, **Finance/Anggaran/Tagihan**, dan **Evaluasi/Refleksi Mingguan** (MVP 3).
+- **Tetap Di Luar Cakupan / Dilarang:** Fokus timer terpisah, catatan kuliah, karier/portofolio, manajemen kontak, dokumen, sinkronisasi Google Calendar eksternal (`D-10`), menjadikan WhatsApp sebagai kanal utama chat AI / CRUD (`D-02`, `D-16`), serta menyimpan password bank, PIN, OTP, atau kredensial e-wallet (**dilarang keras**).
 - **Kepemilikan Data (`user_id`):** Seluruh entitas bisnis wajib terikat ke `user_id` pengguna yang sedang login; backend tidak pernah mempercayai `user_id` dari _request_ klien.
 - **Zona Waktu:** Seluruh _timestamp_ absolut disimpan dalam **UTC** di PostgreSQL; konversi tampilan, evaluasi "hari ini", dan evaluasi _quiet hours_ menggunakan `users.timezone`. Tanggal kalender (`start_date`, `due_date`, `end_date`, `planning_date`) disimpan sebagai `date` lokal (`Y-m-d`).
 - **Soft Delete & Retensi (`D-11`, `D-15`):** `projects`, `tasks`, dan `calendar_events` menggunakan _soft delete_ (`deleted_at`). Tidak boleh menyimpan OTP mentah, kredensial, atau isi percakapan sensitif di log/database.
@@ -65,7 +69,7 @@ Berbeda dari aplikasi _to-do list_ atau kalender generik yang pasif dan terpisah
 ## Evidence on Hand
 
 - Spesifikasi produk dan arsitektur lengkap terdokumentasi di `AGENTS.md`, `CLAUDE.md`, `README.md`, dan direktori `docs/` (`docs/PRD.md`, `docs/DATABASE_SCHEMA.md`, `docs/BUSINESS_RULES.md`, `docs/FRONTEND_ARCHITECTURE.md`, `docs/API_INTEGRATION.md`, `docs/SYSTEM_ARCHITECTURE.md`, `docs/USER_FLOW.md`, `docs/SECURITY.md`, `docs/DEPLOYMENT.md`, `docs/DEVELOPMENT_GUIDELINES.md`).
-- Implementasi **Phase 0** dan **Phase 1 (Core Data)** telah selesai dan terverifikasi (`users`, `projects`, `tasks`, enum, policy, FormRequest, `php artisan user:provision`, dan pengujian otomatis Pest).
+- Implementasi **MVP 1 (Phase 0 s.d. Phase 7 + Optimasi Performa)** telah selesai dan terverifikasi (`12` migrasi PostgreSQL, `84` Pest tests lulus dengan `569` assertions & `2` skipped pada `RegistrationTest`, PHPStan level 7 `0` errors, TypeScript `0` errors, dan Vite+ `vp check` lulus). Arah **MVP 2** (Website AI Chat + Internal MCP + perluasan notifikasi outbound) dan **MVP 3** (Habits, Finance, Refleksi Mingguan) berstatus `Planned` (`CONFIRMED`).
 - Aset merek yang tersedia di repositori saat ini adalah ikon standar aplikasi di `public/favicon.svg`, `public/favicon.ico`, dan `public/apple-touch-icon.png`. Tidak ada klaim testimoni, metrik pelanggan eksternal, atau studi kasus pihak ketiga—pekerjaan ke depan dilarang mengarang klaim atau bukti sosial palsu.
 
 ## Product Principles

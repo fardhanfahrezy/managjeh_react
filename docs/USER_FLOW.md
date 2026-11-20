@@ -112,3 +112,38 @@ flowchart TD
         PurgeSoftDeleted --> PruneLogs["Hapus Reminders terminal (sent/failed/cancelled)\n& AiPlannerRuns yang berusia > 30 hari (D-15)"]
     end
 ```
+
+---
+
+## 7. Alur Target Lanjutan — Website AI Chat, MCP & Perluasan Outbound (`CONFIRMED` / `Planned` — `D-16` s.d. `D-19`)
+
+> **Status Implementasi:** `Planned` (desain teknis MVP 2 terkunci; belum diimplementasikan di kode saat ini). Halaman `/ai-planner` pada Bagian 5 tetap berjalan berdampingan (`D-17`).
+
+### 7.1 Alur A: Interaksi Pengguna dengan Website AI Chat (`/ai-chat`) & Persetujuan Aksi
+
+```mermaid
+flowchart TD
+    OpenChat(["Pengguna membuka /ai-chat di Website Managjeh"]) --> SendMsg["Kirim pesan (Sync JSON POST, maks 2.000 karakter,\nthrottle:ai-chat 20/m + useRateLimitCooldown)"]
+    SendMsg --> Orch["AI Orchestrator memuat sliding window 16 pesan terakhir\n+ users.ai_preferences (tanpa PII - D-15)"]
+    Orch --> CallMcp["Loop native tool-calling (Gemini -> Grok -> OpenRouter,\nmaks 4 putaran) memanggil Internal MCP in-process (app/Mcp/)"]
+    CallMcp --> BackendRead["Backend menyuntikkan User dari sesi auth (bukan dari AI)\n& mengeksekusi 6 Read Tools terhadap PostgreSQL"]
+    BackendRead --> NeedWrite{"Apakah LLM memanggil\nWrite Tool (create/update)?"}
+    NeedWrite -->|"Tidak (hanya tanya/analisis)"| ReplyOnly["Simpan ai_chat_messages & tampilkan jawaban\n(retensi 30 hari / hapus manual - D-19)"]
+    NeedWrite -->|"Ya (dicegat di loop)"| Propose["Simpan ke ai_action_proposals (TTL 24 jam)\n+ pratinjau bentrok via ScheduleConflictDetector\nTampilkan Action Plan Card (checkbox per item)"]
+    Propose --> UserDecision{"Keputusan Pengguna\n(sebelum 24 jam)"}
+    UserDecision -->|"Tolak Semua / Kedaluwarsa"| CancelPlan["Set status rejected / expired\n(tidak ada mutasi data)"]
+    UserDecision -->|"Setujui Terpilih"| ExecBackend["Backend re-validasi kepemilikan & Policy secara idempoten\nEksekusi Domain Services & perbarui audit trail"]
+    ExecBackend --> Confirm["Tampilkan status hasil inline di kartu chat\n& catat di panel 'Riwayat Aksi AI'"]
+```
+
+### 7.2 Alur B: Perluasan Pengingat Outbound (WhatsApp, Rolling Sync & Kesiapan Multi-Channel)
+
+```mermaid
+flowchart TD
+    Source(["Sumber Pengingat:\n1. Event/Task langsung (before_24h, before_1h, event_prep H-15m, event_start)\n2. Scheduler Rolling Sync 48 jam agenda berulang (RecurrenceExpanderService)\n3. Scheduler Digest Deterministik (Harian 07:00 & Mingguan Minggu 19:00 lokal)"]) --> Eval["Evaluasi users.notification_preferences (opt-in & jam kustom)\n& susun pesan kaya (status, saran singkat, link ke /ai-chat)"]
+    Eval --> ConsentCheck{"User terverifikasi OTP (D-14)\n& di luar Quiet Hours (D-06)?"}
+    ConsentCheck -->|"Tidak"| HoldOrSkip["Tunda pasca Quiet Hours atau batalkan"]
+    ConsentCheck -->|"Ya"| Dispatch["Rute via OutboundChannelManager (reminders.channel):\nWhatsApp (Fonnte / Meta Cloud API) | Telegram (Planned - D-19)"]
+    Dispatch --> LogStatus["Simpan status pengiriman di reminders\n& tangani retry aman dengan idempotency_key"]
+    LogStatus --> DeepLink["Pengguna menerima notifikasi WA\n& diarahkan membuka Website Managjeh untuk aksi/detail"]
+```

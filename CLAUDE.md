@@ -2,23 +2,26 @@
 
 Panduan orientasi cepat **Managjeh — Personal OS Mahasiswa** untuk Claude Code dan AI Coding Agent.
 
-> **Instruksi Utama (`Single Source of Truth`):** Seluruh aturan arsitektur, konvensi kode, keputusan mengikat `D-01` s.d. `D-15`, serta `<laravel-boost-guidelines>` terpusat di @[AGENTS.md](AGENTS.md). Baca [AGENTS.md](AGENTS.md) terlebih dahulu sebelum merencanakan atau mengubah kode. **Source code aktual dan pengujian otomatis (`tests/`) adalah sumber kebenaran tertinggi.**
+> **Instruksi Utama (`Single Source of Truth`):** Seluruh aturan arsitektur, konvensi kode, keputusan mengikat `D-01` s.d. `D-19`, serta `<laravel-boost-guidelines>` terpusat di @[AGENTS.md](AGENTS.md). Baca [AGENTS.md](AGENTS.md) terlebih dahulu sebelum merencanakan atau mengubah kode. **Source code aktual dan pengujian otomatis (`tests/`) adalah sumber kebenaran tertinggi.**
 
 ---
 
-## 1. Project Overview & Status Aktual (`FACT`)
+## 1. Project Overview & Status Aktual (`FACT` & `CONFIRMED`)
 
-- **Produk:** Aplikasi web **Personal OS Mahasiswa** (_single-user sekarang, arsitektur siap multi-user_ dengan isolasi `user_id` di setiap tabel domain).
-- **Status Implementasi:** **Seluruh Phase 0 s.d. Phase 7 (MVP 1) telah selesai diimplementasikan dan terverifikasi** (`82` Pest tests lulus, `551` assertions, `0` PHPStan level 7 errors, `0` TypeScript errors, `0` Vite+ lint/format errors).
+- **Produk:** Aplikasi web **Personal OS Mahasiswa** (_single-user sekarang, arsitektur siap multi-user_ dengan isolasi `user_id` di setiap tabel domain). **Website Managjeh** adalah pusat kendali & interaksi AI, sedangkan **WhatsApp** adalah kanal pengingat/notifikasi outbound (`D-16`).
+- **Status Implementasi (`FACT`):** **Seluruh MVP 1 (Phase 0–7) dan MVP 2 (Website AI Chat Hub, Internal MCP Server, Proposal Approval & Audit Trail, Perluasan WhatsApp Outbound & Multi-Channel, serta HTTP Security Headers CSP Nonce) telah selesai diimplementasikan dan terverifikasi** (`14` migrasi aktif, `109` Pest tests lulus dengan `787` assertions & `2` skipped `RegistrationTest`, `0` PHPStan level 7 errors, `0` TypeScript errors, `0` Vite+ lint/format errors).
+- **Arah Terencana (`CONFIRMED` / `Planned` — Belum Diimplementasikan):**
+    - **MVP 3 (`D-18`):** Modul **Habits/Rutinitas/Tidur**, **Finance (Pengeluaran/Anggaran/Tagihan)** dengan privasi ketat, dan **Evaluasi/Refleksi Mingguan**.
 - **Modul Aktif:**
     1. **Auth & Provisioning (`D-01`):** Fortify Login, 2FA TOTP, WebAuthn Passkeys, registrasi publik nonaktif, pembuatan akun via `php artisan user:provision`.
     2. **Dashboard (`/dashboard`):** 8 komponen agregasi harian (`DashboardAggregatorService`).
     3. **Tasks (`/tasks`):** CRUD tugas, filter, konversi `due_at` UTC <-> `users.timezone`, subtugas maks. 1 tingkat (`D-09`), sinkronisasi pengingat otomatis.
     4. **Projects (`/projects`, `/projects/{project}`):** CRUD proyek & kalkulasi progres otomatis (`completed / non-cancelled`).
     5. **Calendar (`/calendar`):** Tampilan `Day`/`Week`/`Month`, agenda berjam (UTC) & _all-day_ (tanggal lokal), aturan berulang (`DAILY`/`WEEKLY`/`MONTHLY`), override/exception kejadian tunggal (`D-08`), deteksi konflik jadwal.
-    6. **WhatsApp Reminder & OTP (`D-02`, `D-05`–`D-07`, `D-14`):** `WhatsAppGatewayInterface` (`FonnteWhatsAppGateway`, `HttpWhatsAppGateway`, `NullWhatsAppGateway`), verifikasi OTP di `/settings/profile`, _quiet hours_ `00:00–05:00` (`QuietHoursAdjuster`), `SendWhatsAppMessageJob`.
-    7. **AI Planner (`/ai-planner`, `D-03`, `D-04`, `D-12`, `D-13`):** Rantai fallback `GeminiPlannerProvider` → `GrokPlannerProvider` → `OpenRouterPlannerProvider` → `FallbackPlannerProvider`, _circuit breaker_ cache, persetujuan pengingat 1 klik.
-    8. **Hardening, Data Export & Retention (`D-11`, `D-15`):** Rate limiters (`ai-planner`, `whatsapp-otp`, `data-export`) dengan UI cooldown `429`, ekspor JSON (`GET /settings/profile/export`), dan command `php artisan app:prune-retention-data`.
+    6. **WhatsApp Reminder, Digests & Multi-Channel (`D-02`, `D-05`–`D-07`, `D-14`, `D-19`):** `OutboundChannelManager` + `WhatsAppGatewayInterface` (`FonnteWhatsAppGateway`, `MetaCloudWhatsAppGateway`, `HttpWhatsAppGateway`, `NullWhatsAppGateway`), verifikasi OTP di `/settings/profile`, _quiet hours_ `00:00–05:00`, `event_prep` H-15m, rolling sync 48 jam (`reminders:sync-recurring`), dan ringkasan harian/mingguan deterministik (`reminders:schedule-digests`).
+    7. **AI Chat & Internal MCP (`/ai-chat`, `/settings/ai`, `D-16`–`D-19`):** Website AI Chat berdampingan dengan `/ai-planner`, Internal MCP Server (`app/Mcp/` — 6 read + 4 write tools tanpa `user_id`), native tool calling (`Gemini → Grok → OpenRouter`), Action Plan Card dengan persetujuan selektif/TTL 24 jam & deteksi konflik jadwal, audit trail, dan retensi chat 30 hari.
+    8. **AI Planner (`/ai-planner`, `D-03`, `D-04`, `D-12`, `D-13`):** Rantai fallback `GeminiPlannerProvider` → `GrokPlannerProvider` → `OpenRouterPlannerProvider` → `FallbackPlannerProvider`, _circuit breaker_ cache, persetujuan pengingat 1 klik.
+    9. **Hardening, Security Headers, Data Export & Retention (`D-11`, `D-15`):** `AddSecurityHeaders` (CSP nonce + XFO + XCTO + COOP + HSTS), rate limiters (`ai-planner`, `ai-chat`, `whatsapp-otp`, `data-export`) dengan UI cooldown `429`, ekspor JSON (`GET /settings/profile/export`), dan command `php artisan app:prune-retention-data`.
 
 ---
 
@@ -71,8 +74,8 @@ Panduan orientasi cepat **Managjeh — Personal OS Mahasiswa** untuk Claude Code
 
 - [AGENTS.md](AGENTS.md) — Panduan utama AI Coding Agent & aturan arsitektur lengkap
 - [DESIGN.md](DESIGN.md) & [PRODUCT.md](PRODUCT.md) — Design System **"The Quiet Desk"** & konteks produk
-- [docs/PRD.md](docs/PRD.md) — Spesifikasi Produk, Keputusan `D-01`–`D-15`, & Riwayat Phase 0–7
-- [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) — Skema PostgreSQL (11 migrasi aktif) & kebijakan retensi
+- [docs/PRD.md](docs/PRD.md) — Spesifikasi Produk, Arah MVP 2–3, Keputusan `D-01`–`D-19`, & Riwayat Phase 0–7
+- [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) — Skema PostgreSQL (12 migrasi aktif) & kebijakan retensi
 - [docs/BUSINESS_RULES.md](docs/BUSINESS_RULES.md) — Aturan bisnis terverifikasi seluruh modul
 - [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md) — Arsitektur sistem & komponen
 - [docs/FRONTEND_ARCHITECTURE.md](docs/FRONTEND_ARCHITECTURE.md) — Kontrak TypeScript & spesifikasi halaman React

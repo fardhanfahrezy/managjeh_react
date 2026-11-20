@@ -40,32 +40,36 @@ Mahasiswa sering harus menyeimbangkan jadwal kuliah, tugas individu/kelompok, pr
 
 ### 4.1 Status Phase Pengembangan (Phase 0 – Phase 7)
 
-| Phase       | Cakupan                                           | Status Aktual              | Verifikasi                                                                                          |
-| :---------- | :------------------------------------------------ | :------------------------- | :-------------------------------------------------------------------------------------------------- |
-| **Phase 0** | Repository Audit & Baseline                       | **Implemented & Verified** | Spesifikasi teknis MVP 1 & keputusan `D-01`–`D-15` terkunci.                                        |
-| **Phase 1** | Core Data (`users`, `projects`, `tasks`) & Auth   | **Implemented & Verified** | Migrasi, Model, Enum, Policy, FormRequest, `user:provision`, unit/feature tests.                    |
-| **Phase 2** | Task & Project UI + Settings Timezone/WA          | **Implemented & Verified** | `ProjectController`, `TaskController`, halaman `tasks/*`, `projects/*`, `settings/profile.tsx`.     |
-| **Phase 3** | Calendar & Agenda Berulang (`D-08`)               | **Implemented & Verified** | Migrasi `calendar_events`, `RecurrenceExpanderService`, `ScheduleConflictDetector`, UI `/calendar`. |
-| **Phase 4** | Dashboard Aggregation                             | **Implemented & Verified** | `DashboardAggregatorService`, `DashboardController`, UI `/dashboard` 8 komponen.                    |
-| **Phase 5** | WhatsApp Reminder & OTP (`D-02`, `D-05`–`D-07`)   | **Implemented & Verified** | Migrasi `reminders`, `FonnteWhatsAppGateway` (teruji live), `QuietHoursAdjuster`, OTP & Queue Job.  |
-| **Phase 6** | AI Planner (`Gemini → Grok → OpenRouter → Rule`)  | **Implemented & Verified** | Migrasi `ai_planner_runs`, 4 provider adapters (teruji live), circuit breaker, UI `/ai-planner`.    |
-| **Phase 7** | Hardening, Retensi (`D-11`, `D-15`) & Data Export | **Implemented & Verified** | `PruneRetentionDataCommand`, rate limiters + UI cooldown `429`, JSON export, `82` Pest tests lulus. |
+| Phase       | Cakupan                                                                            | Status Aktual              | Verifikasi                                                                                                                                                                                                                                                                                                                                                        |
+| :---------- | :--------------------------------------------------------------------------------- | :------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Phase 0** | Repository Audit & Baseline                                                        | **Implemented & Verified** | Spesifikasi teknis MVP 1 & keputusan `D-01`–`D-15` terkunci.                                                                                                                                                                                                                                                                                                      |
+| **Phase 1** | Core Data (`users`, `projects`, `tasks`) & Auth                                    | **Implemented & Verified** | Migrasi, Model, Enum, Policy, FormRequest, `user:provision`, unit/feature tests.                                                                                                                                                                                                                                                                                  |
+| **Phase 2** | Task & Project UI + Settings Timezone/WA                                           | **Implemented & Verified** | `ProjectController`, `TaskController`, halaman `tasks/*`, `projects/*`, `settings/profile.tsx`.                                                                                                                                                                                                                                                                   |
+| **Phase 3** | Calendar & Agenda Berulang (`D-08`)                                                | **Implemented & Verified** | Migrasi `calendar_events`, `RecurrenceExpanderService`, `ScheduleConflictDetector`, UI `/calendar`.                                                                                                                                                                                                                                                               |
+| **Phase 4** | Dashboard Aggregation                                                              | **Implemented & Verified** | `DashboardAggregatorService`, `DashboardController`, UI `/dashboard` 8 komponen.                                                                                                                                                                                                                                                                                  |
+| **Phase 5** | WhatsApp Reminder & OTP (`D-02`, `D-05`–`D-07`)                                    | **Implemented & Verified** | Migrasi `reminders`, `FonnteWhatsAppGateway` (teruji live), `QuietHoursAdjuster`, OTP & Queue Job.                                                                                                                                                                                                                                                                |
+| **Phase 6** | AI Planner (`Gemini → Grok → OpenRouter → Rule`)                                   | **Implemented & Verified** | Migrasi `ai_planner_runs`, 4 provider adapters (teruji live), circuit breaker, UI `/ai-planner`.                                                                                                                                                                                                                                                                  |
+| **Phase 7** | Hardening, Retensi (`D-11`, `D-15`) & Data Export                                  | **Implemented & Verified** | `PruneRetentionDataCommand`, rate limiters + UI cooldown `429`, JSON export, optimasi indeks/query (12 migrasi), `84` Pest tests lulus (`569` assertions, `2` skipped).                                                                                                                                                                                           |
+| **MVP 2**   | Website AI Chat, Internal MCP, Multi-Channel WA & Security Headers (`D-16`–`D-19`) | **Implemented & Verified** | 14 migrasi aktif, `app/Mcp/` (10 tools), `AiChatOrchestrator`, `AiActionProposalService`, `OutboundChannelManager` + `MetaCloudWhatsAppGateway`, `event_prep` H-15m, `reminders:sync-recurring`, `reminders:schedule-digests`, UI `/ai-chat` & `/settings/ai`, `AddSecurityHeaders` (CSP nonce + HSTS), **109 Pest tests lulus (`787` assertions, `2` skipped)**. |
+| **MVP 3**   | Habits/Tidur, Finance & Refleksi Mingguan (`D-18`)                                 | **Planned (`CONFIRMED`)**  | Modul pelacakan kebiasaan/tidur, pengeluaran/anggaran/tagihan (dengan aturan privasi ketat), dan evaluasi mingguan terhubung ke AI Chat & WA.                                                                                                                                                                                                                     |
 
 ### 4.2 Klasifikasi Modul Domain
 
-| Modul                                                 | Status Klasifikasi            | Keterangan                                                                  |
-| :---------------------------------------------------- | :---------------------------- | :-------------------------------------------------------------------------- |
-| Authentication, 2FA TOTP, Passkeys, User Provisioning | **Implemented and verified**  | Fortify + WebAuthn Passkeys + `php artisan user:provision`.                 |
-| Dashboard (`/dashboard`)                              | **Implemented and verified**  | 8 bagian agregasi lintas modul.                                             |
-| Tasks & 1-Level Subtasks (`/tasks`)                   | **Implemented and verified**  | Mendukung filter, subtugas 1 tingkat (`D-09`), sinkronisasi pengingat.      |
-| Projects (`/projects`, `/projects/{project}`)         | **Implemented and verified**  | Kalkulasi progres otomatis & isolasi kepemilikan.                           |
-| Calendar & Recurring Events (`/calendar`)             | **Implemented and verified**  | Day/Week/Month view, recurrence `D-08`, deteksi konflik.                    |
-| WhatsApp Integration & OTP Verification               | **Implemented and verified**  | Driver `fonnte`, `http`, `null`; OTP hash cache; quiet hours `00:00–05:00`. |
-| AI Planner (`/ai-planner`)                            | **Implemented and verified**  | `Gemini` → `Grok` → `OpenRouter` → `Fallback`, circuit breaker, approval.   |
-| Settings, Data Export (JSON), Retention & Cleanup     | **Implemented and verified**  | `/settings/profile`, `/settings/security`, `/settings/appearance`, export.  |
-| Focus/Goals, Habits/Health, Finance/Budgets/Bills     | **Planned / Not implemented** | Di luar cakupan MVP 1 (lihat [docs/PRD.md](docs/PRD.md) Section 1.2).       |
-| Learning, Career, Relationships, Life Admin, Journal  | **Planned / Not implemented** | Di luar cakupan MVP 1 (lihat [docs/PRD.md](docs/PRD.md) Section 1.2).       |
-| External Google Calendar Sync & Two-Way WhatsApp Bot  | **Planned / Not implemented** | Di luar cakupan MVP 1 (`D-02`, `D-10`).                                     |
+| Modul                                                 | Status Klasifikasi           | Keterangan                                                                  |
+| :---------------------------------------------------- | :--------------------------- | :-------------------------------------------------------------------------- |
+| Authentication, 2FA TOTP, Passkeys, User Provisioning | **Implemented and verified** | Fortify + WebAuthn Passkeys + `php artisan user:provision`.                 |
+| Dashboard (`/dashboard`)                              | **Implemented and verified** | 8 bagian agregasi lintas modul.                                             |
+| Tasks & 1-Level Subtasks (`/tasks`)                   | **Implemented and verified** | Mendukung filter, subtugas 1 tingkat (`D-09`), sinkronisasi pengingat.      |
+| Projects (`/projects`, `/projects/{project}`)         | **Implemented and verified** | Kalkulasi progres otomatis & isolasi kepemilikan.                           |
+| Calendar & Recurring Events (`/calendar`)             | **Implemented and verified** | Day/Week/Month view, recurrence `D-08`, deteksi konflik.                    |
+| WhatsApp Integration & OTP Verification               | **Implemented and verified** | Driver `fonnte`, `http`, `null`; OTP hash cache; quiet hours `00:00–05:00`. |
+| AI Planner (`/ai-planner`)                            | **Implemented and verified** | `Gemini` → `Grok` → `OpenRouter` → `Fallback`, circuit breaker, approval.   |
+| Settings, Data Export (JSON), Retention & Cleanup     | **Implemented and verified** | `/settings/profile`, `/settings/security`, `/settings/appearance`, export.  |
+| Website AI Chat, AI Orchestrator & Internal MCP       | **Implemented and verified** | `/ai-chat`, `/settings/ai`, 10 MCP tools (`app/Mcp/`), approval & audit.    |
+| Perluasan WA Outbound & Abstraksi Kanal Telegram      | **Implemented and verified** | `OutboundChannelManager`, `MetaCloudWhatsAppGateway`, H-15m, digests.       |
+| Habits/Tidur, Finance/Budgets/Bills & Weekly Review   | **Planned (MVP 3)**          | Terkonfirmasi (`D-18`), belum diimplementasikan di kode saat ini.           |
+| Focus/Goals, Learning, Career, Relationships, Admin   | **Planned / Future Backlog** | Di luar cakupan MVP 1–3 saat ini (lihat [docs/PRD.md](docs/PRD.md)).        |
+| External Google Calendar Sync & WA sebagai Pusat Chat | **Out of Scope / Dilarang**  | Kalender internal (`D-10`); WhatsApp khusus outbound notifikasi (`D-16`).   |
 
 ---
 
@@ -121,7 +125,7 @@ Lihat detail lengkap di [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.m
 ├── config/                      # Konfigurasi Laravel (termasuk services.php & fortify.php)
 ├── database/
 │   ├── factories/               # Factory untuk User, Project, Task, CalendarEvent, Reminder, AiPlannerRun
-│   ├── migrations/              # 11 file migrasi PostgreSQL
+│   ├── migrations/              # 12 file migrasi PostgreSQL
 │   └── seeders/                 # DatabaseSeeder
 ├── docs/                        # Dokumentasi teknis lengkap (PRD, Schema, Business Rules, API, dll.)
 ├── resources/
@@ -395,8 +399,8 @@ Sebelum membuat perubahan kode, baca panduan arsitektur dan konvensi proyek:
 1. [AGENTS.md](AGENTS.md) — Instruksi utama, konvensi arsitektur, dan aturan wajib untuk AI Coding Agent.
 2. [CLAUDE.md](CLAUDE.md) — Ringkasan orientasi cepat untuk Claude Code.
 3. [DESIGN.md](DESIGN.md) & [PRODUCT.md](PRODUCT.md) — Spesifikasi Design System **"The Quiet Desk"** dan konteks produk.
-4. [docs/PRD.md](docs/PRD.md) — Spesifikasi Teknis MVP 1, Keputusan `D-01`–`D-15`, & Riwayat Phase 0–7.
-5. [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) — Dokumentasi lengkap 11 migrasi PostgreSQL, indeks, FK, dan retensi data.
+4. [docs/PRD.md](docs/PRD.md) — Spesifikasi Teknis MVP 1, Arah MVP 2–3, Keputusan `D-01`–`D-19`, & Riwayat Phase 0–7.
+5. [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) — Dokumentasi lengkap 12 migrasi PostgreSQL, indeks, FK, dan retensi data.
 6. [docs/BUSINESS_RULES.md](docs/BUSINESS_RULES.md) — Aturan bisnis terverifikasi untuk seluruh modul MVP 1.
 7. [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md) — Arsitektur berlapis Laravel 13 + Inertia v3 + Queue/Scheduler.
 8. [docs/FRONTEND_ARCHITECTURE.md](docs/FRONTEND_ARCHITECTURE.md) — Arsitektur React 19, kontrak TypeScript `models.ts`, dan spesifikasi halaman.

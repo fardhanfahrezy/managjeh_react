@@ -172,3 +172,41 @@ WHATSAPP_API_ENDPOINT=
 WHATSAPP_API_TOKEN=
 WHATSAPP_TIMEOUT=10
 ```
+
+---
+
+## 5. Rencana Integrasi Lanjutan — Internal MCP Server & Multi-Channel Outbound (`CONFIRMED` / `Planned` — Belum Diimplementasikan)
+
+> **Catatan Kepatuhan Dokumentasi:** Seluruh route pada Bagian 1 adalah route aktual (`FACT`). Bagian ini **tidak mendefinisikan URL endpoint HTTP fiktif** — kontrak route final akan didokumentasikan setelah implementasi MVP 2 selesai.
+
+### 5.1 Daftar Kemampuan Tools Internal MCP Server (`D-16`, `D-18` — Desain Teknis Terkunci)
+
+Sesuai `D-16`, **Internal MCP Server** diimplementasikan ringan tanpa dependensi baru di `app/Mcp/` (`McpToolInterface`, `McpToolRegistry`, `McpToolExecutor`) dengan kontrak JSON Schema kompatibel MCP dan dipanggil **in-process** langsung oleh AI Orchestrator memakai objek `User` dari autentikasi sesi Laravel (tanpa endpoint HTTP `/mcp` eksternal di MVP 2):
+
+| Tool Name (`CONFIRMED`) | Tipe Operasi | Target Fase (`D-18`) | Sumber Domain Backend                                                             | Persetujuan User Wajib? | Status    |
+| :---------------------- | :----------- | :------------------- | :-------------------------------------------------------------------------------- | :---------------------- | :-------- |
+| `get_my_tasks`          | Read         | MVP 2                | `Task` (`user_id` scoped)                                                         | Tidak                   | `Planned` |
+| `get_upcoming_tasks`    | Read         | MVP 2                | `Task` (`due_at` & aktif)                                                         | Tidak                   | `Planned` |
+| `get_today_schedule`    | Read         | MVP 2                | `CalendarEvent` + `RecurrenceExpanderService`                                     | Tidak                   | `Planned` |
+| `get_schedule_range`    | Read         | MVP 2                | `CalendarEvent` + `RecurrenceExpanderService` + kalkulasi slot waktu kosong       | Tidak                   | `Planned` |
+| `get_my_projects`       | Read         | MVP 2                | `Project` (`user_id` scoped + perhitungan progres)                                | Tidak                   | `Planned` |
+| `get_daily_overview`    | Read         | MVP 2                | `DashboardAggregatorService`                                                      | Tidak                   | `Planned` |
+| `create_task`           | Write        | MVP 2                | Domain logic `Task` + `ReminderSynchronizer`                                      | **Ya (Wajib)**          | `Planned` |
+| `update_task`           | Write        | MVP 2                | `TaskPolicy` + Domain logic `Task` + `ReminderSynchronizer`                       | **Ya (Wajib)**          | `Planned` |
+| `create_schedule`       | Write        | MVP 2                | Domain logic `CalendarEvent` + `ScheduleConflictDetector`                         | **Ya (Wajib)**          | `Planned` |
+| `update_schedule`       | Write        | MVP 2                | `CalendarEventPolicy` + Domain logic `CalendarEvent` + `ScheduleConflictDetector` | **Ya (Wajib)**          | `Planned` |
+| `get_my_habits`         | Read         | MVP 3                | Modul Habits & Rutinitas/Tidur (belum ada)                                        | Tidak                   | `Planned` |
+| `get_my_finances`       | Read         | MVP 3                | Modul Finance/Anggaran/Tagihan (belum ada)                                        | Tidak                   | `Planned` |
+
+- **Batasan Keamanan Kontrak MCP (`D-16`):**
+    - Skema input seluruh tools di atas **dilarang** menyertakan parameter `user_id` yang bisa diisi oleh AI; identitas pengguna wajib diinjeksi oleh lapisan autentikasi backend.
+    - Write tools MVP 2 dibatasi pada 4 operasi **non-destruktif** (`create_task`, `update_task`, `create_schedule`, `update_schedule`); tidak ada tool `delete_*` maupun mutasi `Project` di MVP 2.
+    - Pemanggilan write tool selalu dicegat oleh Orchestrator menjadi Proposal pending ber-TTL **24 jam** (dengan pratinjau konflik via `ScheduleConflictDetector`) dan hanya dieksekusi setelah pengguna menyetujui item terpilih.
+- **Kontrak Integrasi LLM & Pengiriman AI Chat (`D-03`, `D-04`, `TODO-02` Selesai):**
+    - AI Orchestrator memanfaatkan rantai multi-provider `Gemini` → `Grok` → `OpenRouter` di `config/services.php` menggunakan _native function/tool calling_ masing-masing provider (`Gemini` `functionDeclarations`, `Grok` & `OpenRouter` OpenAI-compatible `tools`).
+    - Maksimal **4 putaran tool-call** per pesan, _sliding window_ **16 pesan terakhir**, batas input `2.000` karakter, rate limit `ai-chat` (`20 req/menit` per user), dan pengiriman **synchronous JSON request-response** (tanpa SSE dan tanpa antrean queue). Jika seluruh provider gagal, sistem mengembalikan pesan error ramah tanpa chat fallback tiruan.
+
+### 5.2 Arah Ekstensi Kanal Notifikasi Outbound (`D-19`, `TODO-03` Selesai)
+
+- **Abstraksi Multi-Channel (`F-WA-02`):** Memperkenalkan `OutboundChannelInterface` + `OutboundChannelManager` yang merutekan pengiriman berdasarkan kolom `reminders.channel`. Kanal `'whatsapp'` tetap mendelegasikan ke `WhatsAppGatewayInterface` (Fonnte, HTTP, Null) serta menambah driver adapter `MetaCloudWhatsAppGateway` (`meta_cloud`). Integrasi & UI aktif **Telegram** ditunda sampai dibutuhkan tanpa perlu mengubah `ReminderSynchronizer`.
+- **Ekspansi Pengingat & Digest Deterministik (`F-WA-01`):** Memanfaatkan tabel `reminders` untuk menambahkan **Ringkasan Harian** (default `07:00` lokal), **Ringkasan Mingguan** (default `Minggu 19:00` lokal) — keduanya disusun secara **deterministik (rule-based)** tanpa memanggil LLM — serta **Persiapan Kegiatan (`event_prep`, H-15 menit)** dan **rolling sync 48 jam** harian via `RecurrenceExpanderService` untuk agenda berulang. Pengaturan opt-in & jam kirim disimpan per pengguna di `users.notification_preferences`.
