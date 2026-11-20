@@ -216,3 +216,14 @@ Seluruh item desain teknis MVP 2 berikut telah disepakati dan **belum diimplemen
 - **Skema Minimal & Hardening Keamanan (`F-SEC-01`):**
     - Skema baru: **3 tabel** (`ai_chat_conversations`, `ai_chat_messages`, `ai_action_proposals`) + **2 kolom JSONB** pada `users` (`ai_preferences`, `notification_preferences`).
     - Rate limiter `ai-chat` (`20 req/menit` per user dengan `useRateLimitCooldown`), batas pesan `2.000` karakter, sanitasi konteks tanpa PII/rahasia (`D-15`), serta middleware **HTTP Security Headers** (`HSTS`, `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `COOP`, dan baseline `CSP` kompatibel Vite/Inertia).
+
+---
+
+## 9. Spesifikasi Terimplementasi — Offline-First PWA (`Implemented & Verified` — `D-20` s.d. `D-25`)
+
+- **`D-20` (Full Local-First):** Seluruh baca & tulis pada `Dashboard`, `Tasks`, `Projects`, dan `Calendar` melalui IndexedDB (`Dexie.js`) + antrean Outbox atomik (respons 0ms); `SyncCoordinator` mendorong `POST /sync/push` & menarik `GET /sync/pull` secara otomatis saat online.
+- **`D-21` (Offline Session Lease 7 Hari):** Metadata lease non-sensitif (tanpa password/OTP/token) diperpanjang otomatis tiap sinkronisasi sukses; jika habis saat offline layar terkunci sementara Outbox tetap aman hingga login ulang.
+- **`D-22` (Isolasi Multi-Akun & Logout Guard):** Database IndexedDB terpisah per user (`managjeh_offline_u{id}`); logout saat Outbox kosong langsung menghapus DB lokal, sedangkan logout saat ada perubahan tertunda memunculkan `LogoutOutboxDialog`; pergantian akun otomatis menghapus DB akun sebelumnya.
+- **`D-23` (Kalender Berulang Offline):** Porting penuh `RecurrenceExpander` & `ScheduleConflictDetector` ke TypeScript agar `Day`/`Week`/`Month`, `DAILY`/`WEEKLY`/`MONTHLY`, exception/override kejadian tunggal, dan deteksi konflik berjalan identik saat offline.
+- **`D-24` (OCC Hybrid Auto-Merge + Tombstones):** Optimistic concurrency berbasis `version`, penggabungan otomatis per-field untuk perubahan tidak bertabrakan, `ConflictResolutionDialog` untuk tabrakan field & Edit-vs-Delete, serta `sync_tombstones` (retensi 180 hari) anti-zombie pasca `app:prune-retention-data`.
+- **`D-25` (Perilaku Fitur Online-Only):** `/ai-planner` menampilkan snapshot terakhir + tombol **Susun Prioritas Lokal (Offline)**; `/ai-chat` mode hanya-baca dengan composer nonaktif; WhatsApp OTP & Settings Security nonaktif dengan banner jelas.

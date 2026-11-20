@@ -147,3 +147,20 @@ flowchart TB
     - Kartu Rencana Aksi (checkbox per item, badge bentrok jadwal, tombol **Setujui Terpilih** / **Tolak Semua**), panel/tab ringkas **"Riwayat Aksi AI"**, serta tab Settings baru **`/settings/ai`** untuk preferensi AI & pengaturan notifikasi outbound.
 - **Infrastruktur & Deployment:**
     - Karena MCP Server dan AI Orchestrator berada **in-process di dalam monolith Laravel (`D-16`)** dengan mode **synchronous JSON request-response** (bukan SSE long-lived dan tidak menunggu antrean `queue:work --sleep=15`), deployment tetap berjalan di satu container FrankenPHP Railway (`GOMAXPROCS=1`) tanpa microservice tambahan. Scheduler harian tambahan menangani rolling sync 48 jam agenda berulang dan penjadwalan digest harian/mingguan.
+
+---
+
+## 7. Arsitektur Offline-First PWA & Sinkronisasi Otomatis (`Implemented & Verified` — `D-20` s.d. `D-25`)
+
+- **PWA & Service Worker (`public/manifest.webmanifest`, `public/sw.js`, `GET /offline-shell`):**
+    - Pre-cache aset statis (`/build/*` dari `public/build/manifest.json`, font lokal Inter, ikon PWA, dan `/offline-shell` publik tanpa `auth.user`).
+    - Daftar _Network-Only_ ketat melarang caching halaman autentikasi, keamanan, pengaturan WA, `/sync/*`, request non-`GET`, dan respons `X-Inertia: true`.
+    - Pembaruan SW baru dipicu secara aman via toast pengguna (`SKIP_WAITING`) tanpa menyentuh IndexedDB/Outbox.
+- **Penyimpanan Lokal & Repository (`resources/js/lib/offline/`):**
+    - Registry ringan `managjeh_offline_registry` menyimpan _offline session lease_ 7 hari (`D-21`, nol kredensial sensitif).
+    - Database per akun `managjeh_offline_u{userId}` via `Dexie.js` (`projects`, `tasks`, `calendar_events`, `outbox`, `sync_meta`, `cached_snapshots`) menjamin isolasi multi-akun (`D-22`).
+    - Generic `OfflineEntityRepository<T>` + `ProjectRepository`, `TaskRepository`, `CalendarRepository` menjalankan mutasi entitas + antrean Outbox dalam satu transaksi atomik (`D-20`), siap dipakai ulang oleh modul MVP 3.
+    - Porting penuh `RecurrenceExpander` & `ScheduleConflictDetector` ke TypeScript (`D-23`), `LocalDashboardAggregator`, dan `LocalPriorityPlanner` (`D-25`).
+- **Sync Engine (`app/Services/Sync/SyncService.php`, `SyncController`, `SyncCoordinator.ts`):**
+    - Endpoint khusus `POST /sync/push` (batch maks. 50 operasi, urutan dependensi `project` → `task` → `calendar_event`, idempotency `sync_operations`), `GET /sync/pull` (cursor inkremental + `sync_tombstones` 180 hari + snapshot `ai_planner_latest`), dan `GET /sync/status` (pembaruan lease 7 hari).
+    - Optimistic Concurrency Control (`version`) + **Hybrid Field-Level Auto-Merge** + `ConflictResolutionDialog` (`D-24`), serta integrasi otomatis dengan `ReminderSynchronizer`.

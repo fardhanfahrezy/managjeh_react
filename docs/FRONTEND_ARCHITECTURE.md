@@ -109,3 +109,16 @@ Seluruh halaman aplikasi menggunakan layout utama `AppLayout` (sidebar navigasi 
     - Kartu Rencana Aksi (Action Plan Card) menampilkan daftar item usulan mutasi (`create_task`, `update_task`, `create_schedule`, `update_schedule`) dilengkapi **checkbox per item**, badge peringatan bentrok jadwal otomatis dari `ScheduleConflictDetector`, status masa berlaku **24 jam**, serta tombol **"Setujui Terpilih"** dan **"Tolak Semua"** (tanpa form edit inline di dalam kartu).
 4. **Tab Settings Baru (`/settings/ai`) & Preferensi Notifikasi Outbound:**
     - Menyediakan tab Settings baru **`/settings/ai`** untuk mengatur `users.ai_preferences` (gaya respons `ringkas`/`seimbang`/`mendetail`, jam belajar favorit, durasi blok fokus default `30`/`45`/`60`/`90` menit, dan instruksi singkat maks 300 karakter) serta kontrol opt-in/opt-out dan jam kustom `users.notification_preferences` (Ringkasan Harian, Ringkasan Mingguan, Persiapan Kegiatan H-15 menit).
+
+---
+
+## 7. Arsitektur Offline-First Frontend (`Implemented & Verified` — `D-20` s.d. `D-25`)
+
+- **PWA Registration & Network Hook:** `resources/js/lib/pwa/register-sw.ts` (pendaftaran `/sw.js`, toast pembaruan aman tanpa menyentuh IndexedDB, progresif _Background Sync API_) & `resources/js/hooks/use-network-status.ts`.
+- **Offline Context & Navigasi Offline:** `resources/js/components/offline/offline-provider.tsx` membungkus `AppLayout`, mencegat navigasi Inertia GET saat offline untuk `/dashboard`, `/tasks`, `/projects`, `/projects/{id}`, `/calendar`, `/ai-planner`, dan `/ai-chat`, lalu merender lewat `OfflineRouteRenderer` (juga dipakai `resources/js/pages/offline-shell.tsx` saat hard reload offline).
+- **Komponen UI Status & Keamanan ("The Quiet Desk"):**
+    - `SyncStatusBadge` di `AppSidebarHeader` (7 status pasti: _Offline_, _Menunggu sinkronisasi_, _Menyinkronkan..._, _Tersinkronisasi_, _Konflik_, _Gagal_, _Sesi berakhir_).
+    - `ConflictResolutionDialog` (diff per-field _Versi Perangkat Ini_ vs _Versi Server_).
+    - `LogoutOutboxDialog` (peringatan & opsi sinkronkan dulu saat logout dengan Outbox tertunda, `D-22`).
+    - `OfflineLeaseExpiredScreen` (layar kunci aman saat lease 7 hari habis offline tanpa menghapus Outbox, `D-21`).
+- **Integrasi Halaman Domain:** `dashboard.tsx`, `tasks/index.tsx`, `projects/index.tsx`, `projects/show.tsx`, `calendar/index.tsx` bekerja penuh secara Local-First via `Dexie.js` repositories; `ai-planner/index.tsx` menyediakan snapshot terakhir + tombol **Susun Prioritas Lokal (Offline)**; `ai-chat/index.tsx`, `settings/profile.tsx`, dan `settings/security.tsx` menampilkan banner jelas _"Membutuhkan koneksi internet"_ saat offline (`D-25`).

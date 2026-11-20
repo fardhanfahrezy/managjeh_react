@@ -58,11 +58,17 @@ Dokumen ini mendokumentasikan seluruh mekanisme keamanan, isolasi kepemilikan da
         - `POST /settings/whatsapp/verify-otp` → `throttle:10,1` (**10 request / menit**).
         - `GET /settings/profile/export` → `throttle:data-export` (**5 request / menit** per user).
         - `PUT /settings/password` → `throttle:6,1` (**6 request / menit**).
+        - `POST /sync/push`, `GET /sync/pull`, `GET /sync/status` → `throttle:sync` (**60 request / menit** per user).
 4. **HTTP Security Headers (`AddSecurityHeaders`):**
     - Terdaftar pada grup middleware `web` di [bootstrap/app.php](../bootstrap/app.php) melalui [AddSecurityHeaders.php](../app/Http/Middleware/AddSecurityHeaders.php) dan nonce script di [app.blade.php](../resources/views/app.blade.php):
         - `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Cross-Origin-Opener-Policy: same-origin`.
         - `Strict-Transport-Security: max-age=31536000; includeSubDomains` pada request HTTPS atau lingkungan `production`.
-        - `Content-Security-Policy` memakai `Vite::useCspNonce()` (`script-src 'self' 'nonce-{nonce}'`, `frame-ancestors 'none'`, `object-src 'none'`) pada lingkungan non-local, dengan kelonggaran origin Vite dev server khusus `app()->isLocal()`.
+        - `Content-Security-Policy` memakai `Vite::useCspNonce()` (`script-src 'self' 'nonce-{nonce}'`, `worker-src 'self'`, `manifest-src 'self'`, `frame-ancestors 'none'`, `object-src 'none'`) pada lingkungan non-local, dengan kelonggaran origin Vite dev server khusus `app()->isLocal()`.
+5. **Keamanan Offline-First PWA (`D-20`–`D-25` — `Implemented & Verified`):**
+    - **Zero Private Cache di Service Worker (`public/sw.js`):** Endpoint autentikasi (`/login`, `/logout`, `/two-factor*`, `/passkeys*`), pengaturan keamanan/WA, `/sync/*`, request non-`GET`, dan respons `X-Inertia: true` masuk daftar _Network-Only_. Fallback navigasi hanya menyimpan `/offline-shell` yang secara eksplisit mengirim `auth.user = null`.
+    - **Offline Lease 7 Hari Tanpa Kredensial (`D-21`):** `managjeh_offline_registry` hanya menyimpan metadata profil non-sensitif & masa berlaku lease 7 hari; tidak pernah menyimpan password, OTP, recovery code, passkey secret, atau API token.
+    - **Isolasi Multi-Akun & Logout Guard (`D-22`):** Data lokal dipisahkan per akun (`managjeh_offline_u{userId}`). Logout dengan Outbox kosong langsung menghapus DB lokal; pergantian akun otomatis menghapus DB akun sebelumnya.
+    - **Sync Trust Boundary (`SyncService`):** Identitas selalu diambil dari `$request->user()`, Policy divalidasi per item, `project_uuid`/`parent_uuid`/`task_uuid` lintas user ditolak keras, dan `user_id` dari payload client diabaikan sepenuhnya.
 
 ---
 

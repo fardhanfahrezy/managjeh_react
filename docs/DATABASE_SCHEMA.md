@@ -242,7 +242,11 @@ erDiagram
         - `notification_preferences` (`jsonb`, nullable): toggle aktif/nonaktif & jadwal kustom lokal per kategori pengingat outbound (`daily_summary` default `07:00`, `weekly_summary` default `Minggu 19:00`, `event_prep` H-15 menit).
     - **Reuse Tabel `reminders` (Tanpa Tabel Baru):** Menambahkan variasi `reminder_type` (`event_prep`, `daily_summary`, `weekly_summary`) dengan `idempotency_key` deterministik untuk digest dan rolling sync 48 jam agenda berulang, serta tetap memakai kolom `channel` (`whatsapp`, siap kanal lain).
     - **Perluasan Retensi 30 Hari (`D-15`, `D-19`):** `PruneRetentionDataCommand` akan diperluas untuk memangkas `ai_chat_conversations`, `ai_chat_messages`, dan `ai_action_proposals` yang berusia > 30 hari.
-2. **MVP 3 (`Planned` — Modul Personal OS Lanjutan):**
+2. **Offline-First Sync Schema (`Implemented & Verified` — 2 Migrasi Baru: `2026_11_21_000001` & `2026_11_21_000002`, Total 16 Migrasi Aktif):**
+    - **Kolom Sync pada `projects`, `tasks`, `calendar_events`:** `uuid` (`uuid`, unique, non-null + backfill otomatis), `version` (`unsignedInteger`, default `1`, auto-increment saat update), serta composite index `['user_id', 'updated_at']` untuk query inkremental `/sync/pull`.
+    - **Tabel Baru `sync_operations`:** `id`, `user_id`, `operation_id` (UUID), `entity_type`, `entity_uuid`, `status`, `response_payload` (`jsonb`), `processed_at`; unique `['user_id', 'operation_id']` (idempotency mutlak, dipangkas > 30 hari oleh `app:prune-retention-data`).
+    - **Tabel Baru `sync_tombstones`:** `id`, `user_id`, `entity_type`, `entity_uuid`, `deleted_at`, `expires_at` (retensi 180 hari); unique `['user_id', 'entity_type', 'entity_uuid']`, index `['user_id', 'deleted_at']`. Ditulis otomatis oleh `PruneRetentionDataCommand` sebelum `forceDelete()` agar perangkat offline lama tidak memunculkan kembali data terhapus (`D-24`).
+3. **MVP 3 (`Planned` — Modul Personal OS Lanjutan):**
     - **Habits & Rutinitas/Tidur:** Entitas kebiasaan harian, log penyelesaian, serta target rutinitas/tidur milik `user_id`.
     - **Finance (Pengeluaran, Anggaran & Tagihan):** Entitas transaksi pengeluaran, anggaran kategori, dan jadwal jatuh tempo tagihan milik `user_id` (**dilarang** menyimpan password bank, PIN, OTP, atau kredensial e-wallet).
     - **Evaluasi & Refleksi Mingguan:** Entitas ringkasan evaluasi dan refleksi mingguan milik `user_id`.

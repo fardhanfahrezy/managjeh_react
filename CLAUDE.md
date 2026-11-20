@@ -9,7 +9,7 @@ Panduan orientasi cepat **Managjeh — Personal OS Mahasiswa** untuk Claude Code
 ## 1. Project Overview & Status Aktual (`FACT` & `CONFIRMED`)
 
 - **Produk:** Aplikasi web **Personal OS Mahasiswa** (_single-user sekarang, arsitektur siap multi-user_ dengan isolasi `user_id` di setiap tabel domain). **Website Managjeh** adalah pusat kendali & interaksi AI, sedangkan **WhatsApp** adalah kanal pengingat/notifikasi outbound (`D-16`).
-- **Status Implementasi (`FACT`):** **Seluruh MVP 1 (Phase 0–7) dan MVP 2 (Website AI Chat Hub, Internal MCP Server, Proposal Approval & Audit Trail, Perluasan WhatsApp Outbound & Multi-Channel, serta HTTP Security Headers CSP Nonce) telah selesai diimplementasikan dan terverifikasi** (`14` migrasi aktif, `109` Pest tests lulus dengan `787` assertions & `2` skipped `RegistrationTest`, `0` PHPStan level 7 errors, `0` TypeScript errors, `0` Vite+ lint/format errors).
+- **Status Implementasi (`FACT`):** **Seluruh MVP 1 (Phase 0–7), MVP 2 (Website AI Chat Hub, Internal MCP Server, Proposal Approval & Audit Trail, Perluasan WhatsApp Outbound & Multi-Channel, serta HTTP Security Headers CSP Nonce), dan Offline-First PWA (`D-20`–`D-25`) telah selesai diimplementasikan dan terverifikasi** (`16` migrasi aktif, `116` Pest tests lulus dengan `839` assertions & `2` skipped `RegistrationTest`, `0` PHPStan level 7 errors, `0` TypeScript errors, `0` Vite+ lint/format errors).
 - **Arah Terencana (`CONFIRMED` / `Planned` — Belum Diimplementasikan):**
     - **MVP 3 (`D-18`):** Modul **Habits/Rutinitas/Tidur**, **Finance (Pengeluaran/Anggaran/Tagihan)** dengan privasi ketat, dan **Evaluasi/Refleksi Mingguan**.
 - **Modul Aktif:**
