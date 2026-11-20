@@ -11,19 +11,16 @@ use App\Models\AiPlannerRun;
 use App\Models\Reminder;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\Ai\AiCircuitBreaker;
+use App\Services\Calendar\FreeSlotCalculator;
 use App\Services\Calendar\RecurrenceExpanderService;
 use App\Services\Calendar\ScheduleConflictDetector;
 use App\Services\Reminder\QuietHoursAdjuster;
 use Carbon\CarbonImmutable;
-use Illuminate\Support\Facades\Cache;
 use Throwable;
 
 class AiPlannerService
 {
-    private const int CIRCUIT_FAILURE_THRESHOLD = 3;
-
-    private const int CIRCUIT_WINDOW_SECONDS = 300;
-
     public function __construct(
         private GeminiPlannerProvider $geminiProvider,
         private GrokPlannerProvider $grokProvider,
@@ -32,6 +29,8 @@ class AiPlannerService
         private RecurrenceExpanderService $recurrenceExpander,
         private ScheduleConflictDetector $conflictDetector,
         private QuietHoursAdjuster $quietHoursAdjuster,
+        private FreeSlotCalculator $freeSlotCalculator,
+        private AiCircuitBreaker $circuitBreaker,
     ) {}
 
     public function generateForUser(User $user, string $triggerType = 'manual'): AiPlannerRun
@@ -52,7 +51,7 @@ class AiPlannerService
         foreach ($providers as $provider) {
             $name = $provider->name();
 
-            if ($name !== 'fallback' && $this->isCircuitOpen($name)) {
+            if ($name !== 'fallback' && $this->circuitBreaker->isOpen($name, 'ai_planner')) {
                 $errors[] = "{$name}: circuit open";
 
                 continue;
@@ -63,7 +62,7 @@ class AiPlannerService
                 $validatedResult = $this->validateAndNormalizeResult($response->result, $context);
 
                 if ($name !== 'fallback') {
-                    $this->resetCircuit($name);
+                    $this->circuitBreaker->reset($name, 'ai_planner');
                 }
 
                 return AiPlannerRun::query()->create([
@@ -80,12 +79,12 @@ class AiPlannerService
             } catch (AiProviderException $e) {
                 $errors[] = "{$name}: {$e->getMessage()}";
                 if ($name !== 'fallback') {
-                    $this->recordFailure($name);
+                    $this->circuitBreaker->recordFailure($name, 'ai_planner');
                 }
             } catch (Throwable $e) {
                 $errors[] = "{$name}: unexpected error";
                 if ($name !== 'fallback') {
-                    $this->recordFailure($name);
+                    $this->circuitBreaker->recordFailure($name, 'ai_planner');
                 }
             }
         }
@@ -172,9 +171,10 @@ class AiPlannerService
             ->all();
 
         $rawEvents = $user->calendarEvents()
-            ->whereNull('parent_event_id')
-            ->with(['project:id,name', 'task:id,title,status', 'overrides.project:id,name', 'overrides.task:id,title,status'])
+            ->forDisplayRange($todayLocal, $todayLocal)
             ->get();
+
+        $this->recurrenceExpander->loadRelationsForRange($rawEvents, $todayLocal, $todayLocal);
 
         $expanded = $this->conflictDetector->annotateConflicts(
             $this->recurrenceExpander->expand($rawEvents, $todayLocal, $todayLocal, $timezone),
@@ -188,7 +188,7 @@ class AiPlannerService
             'has_conflict' => (bool) $event['has_conflict'],
         ], $expanded);
 
-        $freeSlots = $this->calculateFreeSlots($todayEvents, $todayLocal->format('Y-m-d'));
+        $freeSlots = $this->freeSlotCalculator->calculateForDate($todayEvents, $todayLocal->format('Y-m-d'));
 
         return new AiPlannerContext(
             planningDate: $todayLocal->format('Y-m-d'),
@@ -196,80 +196,8 @@ class AiPlannerService
             activeTasks: $activeTasks,
             todayEvents: $todayEvents,
             freeSlots: $freeSlots,
+            aiPreferences: $user->resolvedAiPreferences(),
         );
-    }
-
-    /**
-     * @param  array<int, array{
-     *     title: string,
-     *     starts_at_local: string|null,
-     *     ends_at_local: string|null,
-     *     is_all_day: bool,
-     *     has_conflict: bool,
-     * }>  $todayEvents
-     * @return array<int, array{start: string, end: string, minutes: int}>
-     */
-    private function calculateFreeSlots(array $todayEvents, string $dateKey): array
-    {
-        $dayStart = 6 * 60;
-        $dayEnd = 22 * 60;
-        $busy = [];
-
-        foreach ($todayEvents as $event) {
-            if ($event['is_all_day'] || $event['starts_at_local'] === null || $event['ends_at_local'] === null) {
-                continue;
-            }
-
-            if (! str_starts_with($event['starts_at_local'], $dateKey)) {
-                continue;
-            }
-
-            $startMins = $this->toMinutes($event['starts_at_local']);
-            $endMins = $this->toMinutes($event['ends_at_local']);
-
-            if ($endMins > $dayStart && $startMins < $dayEnd) {
-                $busy[] = [max($dayStart, $startMins), min($dayEnd, $endMins)];
-            }
-        }
-
-        usort($busy, fn (array $a, array $b): int => $a[0] <=> $b[0]);
-
-        $slots = [];
-        $cursor = $dayStart;
-
-        foreach ($busy as [$busyStart, $busyEnd]) {
-            if ($busyStart - $cursor >= 30) {
-                $slots[] = [
-                    'start' => $this->formatMinutes($cursor),
-                    'end' => $this->formatMinutes($busyStart),
-                    'minutes' => $busyStart - $cursor,
-                ];
-            }
-            $cursor = max($cursor, $busyEnd);
-        }
-
-        if ($dayEnd - $cursor >= 30) {
-            $slots[] = [
-                'start' => $this->formatMinutes($cursor),
-                'end' => $this->formatMinutes($dayEnd),
-                'minutes' => $dayEnd - $cursor,
-            ];
-        }
-
-        return array_slice($slots, 0, 5);
-    }
-
-    private function toMinutes(string $localIso): int
-    {
-        $hour = (int) substr($localIso, 11, 2);
-        $minute = (int) substr($localIso, 14, 2);
-
-        return $hour * 60 + $minute;
-    }
-
-    private function formatMinutes(int $totalMinutes): string
-    {
-        return sprintf('%02d:%02d', intdiv($totalMinutes, 60), $totalMinutes % 60);
     }
 
     /**
@@ -356,28 +284,5 @@ class AiPlannerService
             'recommended_reminders' => $recommendedReminders,
             'warnings' => $warnings,
         ];
-    }
-
-    private function isCircuitOpen(string $provider): bool
-    {
-        return (bool) Cache::get("ai_planner:cb:{$provider}:open", false);
-    }
-
-    private function recordFailure(string $provider): void
-    {
-        $countKey = "ai_planner:cb:{$provider}:failures";
-        $failures = (int) Cache::get($countKey, 0) + 1;
-
-        Cache::put($countKey, $failures, self::CIRCUIT_WINDOW_SECONDS);
-
-        if ($failures >= self::CIRCUIT_FAILURE_THRESHOLD) {
-            Cache::put("ai_planner:cb:{$provider}:open", true, self::CIRCUIT_WINDOW_SECONDS);
-        }
-    }
-
-    private function resetCircuit(string $provider): void
-    {
-        Cache::forget("ai_planner:cb:{$provider}:failures");
-        Cache::forget("ai_planner:cb:{$provider}:open");
     }
 }

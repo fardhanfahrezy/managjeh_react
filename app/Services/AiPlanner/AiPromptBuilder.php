@@ -18,7 +18,8 @@ Tugas Anda: analisis daftar tugas aktif, agenda hari ini, dan slot waktu kosong 
 Aturan ketat:
 1. Balas HANYA dengan JSON valid tanpa markdown fence atau penjelasan tambahan.
 2. Setiap `task_id` pada `priorities` dan `recommended_reminders` WAJIB berasal dari `tasks[].id` di input.
-3. Format JSON wajib:
+3. Bila `ai_preferences` tersedia pada input, sesuaikan gaya bahasa (`tone`), jam belajar favorit (`preferred_study_start`–`preferred_study_end`), estimasi durasi fokus (`default_focus_minutes`), dan catatan `custom_instruction` tanpa melanggar format JSON.
+4. Format JSON wajib:
 {
   "summary": "string ringkas kondisi hari ini",
   "priorities": [

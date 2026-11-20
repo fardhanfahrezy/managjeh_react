@@ -76,6 +76,8 @@ class ProfileController extends Controller
                 'whatsapp_enabled' => $user->whatsapp_enabled,
                 'reminder_quiet_start' => $user->reminder_quiet_start,
                 'reminder_quiet_end' => $user->reminder_quiet_end,
+                'ai_preferences' => $user->resolvedAiPreferences(),
+                'notification_preferences' => $user->resolvedNotificationPreferences(),
                 'created_at' => $user->created_at?->toIso8601String(),
             ],
             'projects' => $user->projects()
@@ -93,6 +95,9 @@ class ProfileController extends Controller
             'ai_planner_runs' => $user->aiPlannerRuns()
                 ->orderBy('id')
                 ->get(['id', 'planning_date', 'trigger_type', 'provider', 'model', 'status', 'result', 'created_at']),
+            'ai_action_proposals' => $user->aiActionProposals()
+                ->orderBy('id')
+                ->get(['id', 'tool_name', 'status', 'target_type', 'target_id', 'result_summary', 'decided_at', 'executed_at', 'created_at']),
         ], 200, [
             'Content-Disposition' => 'attachment; filename="'.$filename.'"',
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);

@@ -26,6 +26,13 @@ readonly class AiPlannerContext
      *     end: string,
      *     minutes: int,
      * }>  $freeSlots
+     * @param  array{
+     *     tone?: string,
+     *     preferred_study_start?: string,
+     *     preferred_study_end?: string,
+     *     default_focus_minutes?: int,
+     *     custom_instruction?: string|null,
+     * }  $aiPreferences
      */
     public function __construct(
         public string $planningDate,
@@ -33,6 +40,7 @@ readonly class AiPlannerContext
         public array $activeTasks,
         public array $todayEvents,
         public array $freeSlots,
+        public array $aiPreferences = [],
     ) {}
 
     /**
@@ -40,12 +48,24 @@ readonly class AiPlannerContext
      */
     public function toSanitizedSnapshot(): array
     {
-        return [
+        $snapshot = [
             'planning_date' => $this->planningDate,
             'timezone' => $this->timezone,
             'tasks' => $this->activeTasks,
             'events' => $this->todayEvents,
             'free_slots' => $this->freeSlots,
         ];
+
+        if ($this->aiPreferences !== []) {
+            $snapshot['ai_preferences'] = [
+                'tone' => $this->aiPreferences['tone'] ?? 'balanced',
+                'preferred_study_start' => $this->aiPreferences['preferred_study_start'] ?? '19:00',
+                'preferred_study_end' => $this->aiPreferences['preferred_study_end'] ?? '22:00',
+                'default_focus_minutes' => $this->aiPreferences['default_focus_minutes'] ?? 60,
+                'custom_instruction' => $this->aiPreferences['custom_instruction'] ?? null,
+            ];
+        }
+
+        return $snapshot;
     }
 }
