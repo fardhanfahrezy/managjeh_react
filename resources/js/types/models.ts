@@ -4,15 +4,20 @@ export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
 
 export type ProjectSummary = {
     id: number;
+    uuid?: string;
     name: string;
     status: ProjectStatus;
 };
 
 export type Task = {
     id: number;
+    uuid?: string;
+    version?: number;
     user_id: number;
     project_id: number | null;
+    project_uuid?: string | null;
     parent_id: number | null;
+    parent_uuid?: string | null;
     title: string;
     description: string | null;
     status: TaskStatus;
@@ -29,6 +34,8 @@ export type Task = {
 
 export type Project = {
     id: number;
+    uuid?: string;
+    version?: number;
     user_id: number;
     name: string;
     description: string | null;
@@ -48,12 +55,18 @@ export type CalendarView = 'day' | 'week' | 'month';
 
 export type CalendarEvent = {
     id: number;
+    uuid?: string;
     series_id: number;
+    series_uuid?: string;
+    version?: number;
     occurrence_key: string;
     user_id: number;
     project_id: number | null;
+    project_uuid?: string | null;
     task_id: number | null;
+    task_uuid?: string | null;
     parent_event_id: number | null;
+    parent_event_uuid?: string | null;
     recurrence_id: string | null;
     is_recurring: boolean;
     is_override: boolean;
@@ -69,8 +82,13 @@ export type CalendarEvent = {
     is_cancelled: boolean;
     recurrence_rule: string | null;
     recurrence_until: string | null;
-    project?: { id: number; name: string } | null;
-    task?: { id: number; title: string; status: TaskStatus } | null;
+    project?: { id: number; uuid?: string; name: string } | null;
+    task?: {
+        id: number;
+        uuid?: string;
+        title: string;
+        status: TaskStatus;
+    } | null;
     has_conflict: boolean;
 };
 
@@ -100,6 +118,7 @@ export type TaskOption = {
 
 export type DashboardTaskItem = {
     id: number;
+    uuid?: string;
     title: string;
     status: TaskStatus;
     priority: TaskPriority;
@@ -111,6 +130,7 @@ export type DashboardTaskItem = {
 
 export type DashboardProjectItem = {
     id: number;
+    uuid?: string;
     name: string;
     status: ProjectStatus;
     due_date: string | null;
