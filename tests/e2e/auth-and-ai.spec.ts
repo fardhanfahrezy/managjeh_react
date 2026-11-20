@@ -37,13 +37,13 @@ test.describe('Managjeh Browser E2E (Login, AI Chat, Settings AI)', () => {
         await page.getByRole('link', { name: 'AI Chat' }).click();
         await page.waitForURL('**/ai-chat');
         await expect(
-            page.getByRole('heading', { name: /Asisten AI Managjeh|Riwayat/ }),
-        ).toBeVisible();
-        await expect(
             page.getByRole('tab', { name: 'Percakapan' }),
         ).toBeVisible();
         await expect(
             page.getByRole('tab', { name: /Riwayat Aksi/ }),
+        ).toBeVisible();
+        await expect(
+            page.getByLabel('Tulis pesan untuk Asisten AI Managjeh'),
         ).toBeVisible();
 
         await page.getByRole('tab', { name: /Riwayat Aksi/ }).click();
