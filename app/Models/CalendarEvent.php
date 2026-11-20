@@ -10,13 +10,27 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
+ * @property int $id
+ * @property string $uuid
+ * @property int $version
+ * @property int $user_id
+ * @property int|null $project_id
+ * @property int|null $task_id
+ * @property int|null $parent_event_id
+ * @property string|null $recurrence_id
+ * @property string $title
+ * @property string|null $description
  * @property CarbonImmutable|null $starts_at
  * @property CarbonImmutable|null $ends_at
  * @property CarbonImmutable|null $start_date
  * @property CarbonImmutable|null $end_date
+ * @property bool $is_all_day
+ * @property bool $is_cancelled
+ * @property string|null $recurrence_rule
  * @property CarbonImmutable|null $recurrence_until
  * @property array<int, string>|null $recurrence_exceptions
  */
@@ -26,9 +40,17 @@ class CalendarEvent extends Model
     use HasFactory, SoftDeletes;
 
     /**
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'version' => 1,
+    ];
+
+    /**
      * @var list<string>
      */
     protected $fillable = [
+        'uuid',
         'user_id',
         'project_id',
         'task_id',
@@ -49,6 +71,18 @@ class CalendarEvent extends Model
 
     protected static function booted(): void
     {
+        static::creating(function (CalendarEvent $event): void {
+            $event->uuid = $event->uuid ?: (string) Str::uuid();
+            $event->version = max(1, (int) ($event->version ?? 1));
+        });
+
+        static::updating(function (CalendarEvent $event): void {
+            if ($event->getOriginal('uuid') !== null) {
+                $event->uuid = (string) $event->getOriginal('uuid');
+            }
+            $event->version = ((int) $event->getOriginal('version', 1)) + 1;
+        });
+
         static::saving(function (CalendarEvent $event): void {
             if ($event->project_id !== null) {
                 $projectOwnerId = Project::withTrashed()
@@ -130,6 +164,7 @@ class CalendarEvent extends Model
             'is_cancelled' => 'boolean',
             'recurrence_until' => 'immutable_date',
             'recurrence_exceptions' => 'array',
+            'version' => 'integer',
         ];
     }
 

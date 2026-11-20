@@ -13,10 +13,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
  * @property int $id
+ * @property string $uuid
+ * @property int $version
  * @property int $user_id
  * @property int|null $project_id
  * @property int|null $parent_id
@@ -32,6 +35,7 @@ use Illuminate\Validation\ValidationException;
  * @property CarbonInterface|null $deleted_at
  */
 #[Fillable([
+    'uuid',
     'user_id',
     'project_id',
     'parent_id',
@@ -55,6 +59,7 @@ class Task extends Model
         'status' => TaskStatus::Todo->value,
         'priority' => TaskPriority::Medium->value,
         'sort_order' => 0,
+        'version' => 1,
     ];
 
     /**
@@ -68,11 +73,24 @@ class Task extends Model
             'due_at' => 'datetime',
             'completed_at' => 'datetime',
             'sort_order' => 'integer',
+            'version' => 'integer',
         ];
     }
 
     protected static function booted(): void
     {
+        static::creating(function (Task $task): void {
+            $task->uuid = $task->uuid ?: (string) Str::uuid();
+            $task->version = max(1, (int) ($task->version ?? 1));
+        });
+
+        static::updating(function (Task $task): void {
+            if ($task->getOriginal('uuid') !== null) {
+                $task->uuid = (string) $task->getOriginal('uuid');
+            }
+            $task->version = ((int) $task->getOriginal('version', 1)) + 1;
+        });
+
         static::saving(function (Task $task): void {
             if ($task->project_id !== null) {
                 $project = Project::withTrashed()->find($task->project_id);

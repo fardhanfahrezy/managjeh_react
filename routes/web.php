@@ -5,10 +5,12 @@ use App\Http\Controllers\AiPlannerController;
 use App\Http\Controllers\CalendarEventController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\SyncController;
 use App\Http\Controllers\TaskController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'welcome')->name('home');
+Route::inertia('offline-shell', 'offline-shell')->name('offline-shell');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', DashboardController::class)->name('dashboard');
@@ -36,6 +38,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('ai-chat.conversations.destroy');
     Route::post('ai-chat/messages/{message}/proposals/decide', [AiChatController::class, 'decideProposals'])
         ->name('ai-chat.proposals.decide');
+
+    Route::prefix('sync')->middleware('throttle:sync')->name('sync.')->group(function () {
+        Route::post('push', [SyncController::class, 'push'])->name('push');
+        Route::get('pull', [SyncController::class, 'pull'])->name('pull');
+        Route::get('status', [SyncController::class, 'status'])->name('status');
+    });
 });
 
 require __DIR__.'/settings.php';

@@ -119,6 +119,12 @@ class AppServiceProvider extends ServiceProvider
 
             return Limit::perMinute(5)->by((string) ($user !== null ? $user->id : $request->ip()));
         });
+
+        RateLimiter::for('sync', function (Request $request): Limit {
+            $user = $request->user();
+
+            return Limit::perMinute(60)->by((string) ($user !== null ? $user->id : $request->ip()));
+        });
     }
 
     /**

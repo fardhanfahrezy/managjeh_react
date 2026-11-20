@@ -13,9 +13,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 /**
  * @property int $id
+ * @property string $uuid
+ * @property int $version
  * @property int $user_id
  * @property string $name
  * @property string|null $description
@@ -30,6 +33,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property int|null $non_cancelled_tasks_count
  */
 #[Fillable([
+    'uuid',
     'user_id',
     'name',
     'description',
@@ -48,6 +52,7 @@ class Project extends Model
      */
     protected $attributes = [
         'status' => ProjectStatus::Active->value,
+        'version' => 1,
     ];
 
     /**
@@ -60,11 +65,24 @@ class Project extends Model
             'start_date' => 'date:Y-m-d',
             'due_date' => 'date:Y-m-d',
             'completed_at' => 'datetime',
+            'version' => 'integer',
         ];
     }
 
     protected static function booted(): void
     {
+        static::creating(function (Project $project): void {
+            $project->uuid = $project->uuid ?: (string) Str::uuid();
+            $project->version = max(1, (int) ($project->version ?? 1));
+        });
+
+        static::updating(function (Project $project): void {
+            if ($project->getOriginal('uuid') !== null) {
+                $project->uuid = (string) $project->getOriginal('uuid');
+            }
+            $project->version = ((int) $project->getOriginal('version', 1)) + 1;
+        });
+
         static::saving(function (Project $project): void {
             if ($project->status === ProjectStatus::Completed) {
                 $project->completed_at ??= now();
